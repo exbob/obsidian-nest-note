@@ -1,0 +1,816 @@
+import { Modal, Notice, Plugin, setIcon } from "obsidian";
+import type {
+  App,
+  TAbstractFile,
+  TFile,
+  TFolder,
+  Workspace,
+  WorkspaceLeaf,
+} from "obsidian";
+import { scanDocuments } from "./domain/document-scanner";
+import {
+  ChildrenLinksError,
+  updateChildrenLinks,
+} from "./domain/children-links";
+import {
+  FrontmatterParseError,
+  ensureDocumentFrontmatter,
+} from "./domain/frontmatter";
+import { NestNoteAttachmentService } from "./services/attachment-service";
+import type {
+  AttachmentFileRef,
+  AttachmentServiceApp,
+} from "./services/attachment-service";
+import { NestNoteDocumentService } from "./services/document-service";
+import type {
+  DocumentServiceApp,
+  DocumentWorkspaceLeaf,
+} from "./services/document-service";
+import { isAlreadyNoticed, formatIso8601 } from "./services/document-service";
+import { NestNoteVaultEventCoordinator } from "./services/vault-event-coordinator";
+import type {
+  CoordinatorApp,
+  CoordinatorFileRef,
+  EventRefLike,
+} from "./services/vault-event-coordinator";
+import type { DocumentNode, DocumentService, VaultEntry } from "./types";
+import {
+  DocumentTreeView,
+  VIEW_TYPE_NESTNOTE,
+} from "./ui/document-tree-view";
+
+const COMMAND_IDS = {
+  openDocumentTree: "nestnote:open-document-tree",
+  newDocument: "nestnote:new-document",
+  newChildDocument: "nestnote:new-child-document",
+  refresh: "nestnote:refresh",
+  archiveCurrentAttachment: "nestnote:archive-current-attachment",
+} as const;
+
+export default class NestNotePlugin extends Plugin {
+  private documents!: DocumentService;
+  private attachments!: NestNoteAttachmentService;
+  private coordinator!: NestNoteVaultEventCoordinator;
+  private scanFlight!: SingleFlight;
+  private nodes: DocumentNode[] = [];
+  private attachmentActiveFile: AttachmentFileRef | null = null;
+  private stopped = false;
+
+  async onload(): Promise<void> {
+    const notify = (message: string): void => {
+      new Notice(message);
+    };
+
+    this.coordinator = new NestNoteVaultEventCoordinator(
+      createCoordinatorApp(this.app),
+      {
+        registerEvent: (ref) => {
+          this.registerEvent(ref);
+        },
+      },
+      {
+        handleCreatedFile: (file) => this.handleCreatedFile(file),
+        onRefresh: () => {
+          void this.scanAndSync();
+        },
+        onError: notify,
+      },
+    );
+
+    this.scanFlight = new SingleFlight(() => this.performScanAndSync());
+
+    const innerDocuments = new NestNoteDocumentService(
+      createDocumentServiceApp(this.app),
+      { notice: notify },
+    );
+    this.documents = wrapWithInternal(innerDocuments, this.coordinator);
+    this.attachments = new NestNoteAttachmentService(
+      createAttachmentServiceApp(this.app, () => this.attachmentActiveFile),
+      {
+        notice: notify,
+        runInternal: (fn) => this.coordinator.runInternal(fn),
+        requestRefresh: (paths) => this.coordinator.requestRefresh(paths),
+      },
+    );
+
+    this.registerView(
+      VIEW_TYPE_NESTNOTE,
+      (leaf) =>
+        new DocumentTreeView(leaf, {
+          documents: this.documents,
+          getNodes: () => this.nodes,
+          requestRefresh: () => {
+            void this.scanAndSync();
+          },
+          notice: notify,
+        }),
+    );
+
+    this.addRibbonIcon("folder-tree", "NestNote", () => {
+      this.openDocumentTree();
+    });
+
+    this.addCommand({
+      id: COMMAND_IDS.openDocumentTree,
+      name: "打开文档树",
+      callback: () => {
+        this.openDocumentTree();
+      },
+    });
+    this.addCommand({
+      id: COMMAND_IDS.newDocument,
+      name: "新建文档",
+      callback: () => {
+        this.promptAndCreate(null);
+      },
+    });
+    this.addCommand({
+      id: COMMAND_IDS.newChildDocument,
+      name: "新建子文档",
+      callback: () => {
+        const active = this.app.workspace.getActiveFile();
+        const parent = resolveActiveIndexDocument(this.app, active?.path ?? null);
+        if (parent === null) {
+          notify("请先打开一个 NestNote 文档再新建子文档");
+          return;
+        }
+        this.promptAndCreate(parent);
+      },
+    });
+    this.addCommand({
+      id: COMMAND_IDS.refresh,
+      name: "刷新",
+      callback: () => {
+        void this.scanAndSync();
+      },
+    });
+    this.addCommand({
+      id: COMMAND_IDS.archiveCurrentAttachment,
+      name: "归档当前附件",
+      callback: () => {
+        void this.archiveCurrentAttachment();
+      },
+    });
+
+    this.coordinator.start();
+    this.register(() => {
+      this.stopped = true;
+      this.coordinator.stop();
+    });
+
+    this.app.workspace.onLayoutReady(() => {
+      void this.scanAndSync();
+    });
+  }
+
+  private openDocumentTree(): void {
+    void this.activateView().catch((error) => {
+      new Notice(errorMessage(error));
+    });
+  }
+
+  async activateView(): Promise<void> {
+    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_NESTNOTE);
+    let leaf = existing[0];
+    if (leaf === undefined) {
+      leaf =
+        this.app.workspace.getRightLeaf(true) ??
+        this.app.workspace.getLeaf(true);
+      await leaf.setViewState({ type: VIEW_TYPE_NESTNOTE, active: true });
+    }
+    await revealLeaf(this.app.workspace, leaf);
+  }
+
+  private async handleCreatedFile(file: CoordinatorFileRef): Promise<void> {
+    await this.attachments.handleCreatedFile(toAttachmentRef(file));
+  }
+
+  private promptAndCreate(parentPath: string | null): void {
+    const title = parentPath === null ? "新建文档" : "新建子文档";
+    new CommandNameModal(this.app, title, (name) => {
+      void this.runAction(() => this.documents.create(parentPath, name));
+    }).open();
+  }
+
+  private async archiveCurrentAttachment(): Promise<void> {
+    const active = this.app.workspace.getActiveFile();
+    if (active === null) {
+      new Notice("无法判断附件归属，当前没有活动文件");
+      return;
+    }
+    const documentPath = resolveDocumentPath(this.app, active.path);
+    if (documentPath === null) {
+      new Notice(`无法判断附件归属，已保留原位置：${active.path}`);
+      return;
+    }
+    const index = getFile(this.app, `${documentPath}/index.md`);
+    if (index === null) {
+      new Notice(`无法判断附件归属，已保留原位置：${active.path}`);
+      return;
+    }
+    this.attachmentActiveFile = toAttachmentRef(index);
+    try {
+      await this.attachments.handleCreatedFile(toAttachmentRef(active), {
+        notify: true,
+      });
+    } catch (error) {
+      new Notice(errorMessage(error));
+    } finally {
+      this.attachmentActiveFile = null;
+    }
+  }
+
+  private async runAction(action: () => Promise<unknown>): Promise<void> {
+    try {
+      await action();
+      await this.scanAndSync();
+    } catch (error) {
+      if (!isAlreadyNoticed(error)) {
+        new Notice(errorMessage(error));
+      }
+    }
+  }
+
+  private scanAndSync(): Promise<void> {
+    if (this.stopped) {
+      return Promise.resolve();
+    }
+    return this.scanFlight.request();
+  }
+
+  private async performScanAndSync(): Promise<void> {
+    if (this.stopped) {
+      return;
+    }
+    try {
+      await this.coordinator.runInternal(async () => {
+        this.nodes = scanFromApp(this.app);
+        await syncDocumentMetadata(this.app, this.nodes);
+      });
+      this.renderOpenViews();
+    } catch (error) {
+      if (!isAlreadyNoticed(error)) {
+        new Notice(errorMessage(error));
+      }
+    }
+  }
+
+  private renderOpenViews(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_NESTNOTE)) {
+      const view = leaf.view;
+      if (view instanceof DocumentTreeView) {
+        view.render(this.nodes);
+      }
+    }
+  }
+}
+
+function wrapWithInternal(
+  inner: DocumentService,
+  coordinator: NestNoteVaultEventCoordinator,
+): DocumentService {
+  return {
+    create: (parentPath, name) =>
+      coordinator.runInternal(() => inner.create(parentPath, name)),
+    rename: (documentPath, newName) =>
+      coordinator.runInternal(() => inner.rename(documentPath, newName)),
+    trash: (documentPath) =>
+      coordinator.runInternal(() => inner.trash(documentPath)),
+    open: (documentPath) => inner.open(documentPath),
+  };
+}
+
+function createCoordinatorApp(app: App): CoordinatorApp {
+  return {
+    vault: {
+      on: (name, callback) => listenVault(app, name, callback),
+      offref: (ref) => {
+        app.vault.offref(ref);
+      },
+    },
+    workspace: {
+      get layoutReady() {
+        return app.workspace.layoutReady;
+      },
+    },
+  };
+}
+
+function listenVault(
+  app: App,
+  name: string,
+  callback: (...args: unknown[]) => unknown,
+): EventRefLike {
+  const handler = (...args: unknown[]): unknown => callback(...args);
+  switch (name) {
+    case "create":
+      return app.vault.on("create", (file) => handler(file));
+    case "modify":
+      return app.vault.on("modify", (file) => handler(file));
+    case "delete":
+      return app.vault.on("delete", (file) => handler(file));
+    case "rename":
+      return app.vault.on("rename", (file, oldPath) => handler(file, oldPath));
+    default:
+      throw new Error(`Unsupported vault event: ${name}`);
+  }
+}
+
+function createDocumentServiceApp(app: App): DocumentServiceApp {
+  const vault: DocumentServiceApp["vault"] = {
+    createFolder: (path) => app.vault.createFolder(path),
+    create: (path, data) => app.vault.create(path, data),
+    read: (file) => {
+      const found = requireFile(app, file.path);
+      return app.vault.read(found);
+    },
+    modify: async (file, data) => {
+      const found = requireFile(app, file.path);
+      await app.vault.modify(found, data);
+    },
+    rename: async (file, newPath) => {
+      const found = requireAbstract(app, file.path);
+      await renameKeepingLinks(app, found, newPath);
+    },
+    delete: async (file, force) => {
+      const found = requireAbstract(app, file.path);
+      await app.vault.delete(found, force);
+    },
+    trash: async (file, system) => {
+      const found = requireAbstract(app, file.path);
+      await app.vault.trash(found, system);
+    },
+    getAbstractFileByPath: (path) => app.vault.getAbstractFileByPath(path),
+    getFolderByPath: (path) => getFolder(app, path),
+    getFileByPath: (path) => getFile(app, path),
+    getAllLoadedFiles: () =>
+      app.vault.getAllLoadedFiles().map((entry) => ({
+        path: entry.path,
+        children: isFolder(entry) ? entry.children : undefined,
+      })),
+  };
+
+  if (typeof app.fileManager.trashFile !== "function") {
+    return { vault, workspace: createDocumentWorkspace(app) };
+  }
+
+  return {
+    vault,
+    fileManager: {
+      trashFile: async (file) => {
+        const found = requireAbstract(app, file.path);
+        await app.fileManager.trashFile(found);
+      },
+    },
+    workspace: createDocumentWorkspace(app),
+  };
+}
+
+function createDocumentWorkspace(
+  app: App,
+): DocumentServiceApp["workspace"] {
+  return {
+    getLeaf: (newLeaf) => wrapWorkspaceLeaf(app, app.workspace.getLeaf(newLeaf)),
+    getMostRecentLeaf: () => {
+      const leaf = app.workspace.getMostRecentLeaf();
+      return leaf === null ? null : wrapWorkspaceLeaf(app, leaf);
+    },
+    iterateRootLeaves: (callback) => {
+      app.workspace.iterateRootLeaves((leaf) => {
+        callback(wrapWorkspaceLeaf(app, leaf));
+      });
+    },
+  };
+}
+
+function wrapWorkspaceLeaf(app: App, leaf: WorkspaceLeaf): DocumentWorkspaceLeaf {
+  return {
+    openFile: async (file) => {
+      const found = requireFile(app, file.path);
+      await leaf.openFile(found);
+    },
+    getViewType: () => leaf.view.getViewType(),
+  };
+}
+
+function createAttachmentServiceApp(
+  app: App,
+  getOverride: () => AttachmentFileRef | null,
+): AttachmentServiceApp {
+  return {
+    vault: {
+      rename: async (file, newPath) => {
+        const found = requireAbstract(app, file.path);
+        await renameKeepingLinks(app, found, newPath);
+      },
+      createFolder: (path) => app.vault.createFolder(path),
+      getAbstractFileByPath: (path) =>
+        toAttachmentLookup(app.vault.getAbstractFileByPath(path)),
+      getFolderByPath: (path) => toAttachmentLookup(getFolder(app, path)),
+      getFileByPath: (path) => {
+        const file = getFile(app, path);
+        return file === null ? null : toAttachmentRef(file);
+      },
+      ...probeVaultAttachmentConfig(app.vault),
+    },
+    fileManager: probeAttachmentFileManager(app),
+    workspace: {
+      getActiveFile: () => {
+        const override = getOverride();
+        if (override !== null) {
+          return override;
+        }
+        const active = app.workspace.getActiveFile();
+        return active === null ? null : toAttachmentRef(active);
+      },
+    },
+  };
+}
+
+function probeAttachmentFileManager(
+  app: App,
+): AttachmentServiceApp["fileManager"] {
+  const manager = app.fileManager;
+  if (typeof manager.getNewFileParent !== "function") {
+    return undefined;
+  }
+  return {
+    getNewFileParent: (sourcePath, newFilePath) => {
+      const folder = manager.getNewFileParent(sourcePath, newFilePath);
+      return { path: folder.path };
+    },
+  };
+}
+
+function probeVaultAttachmentConfig(vault: object): {
+  getConfig?: (name: string) => unknown;
+  config?: unknown;
+} {
+  if (!isRecord(vault)) {
+    return {};
+  }
+  const probed: {
+    getConfig?: (name: string) => unknown;
+    config?: unknown;
+  } = {};
+  if (typeof vault.getConfig === "function") {
+    const getConfig = vault.getConfig.bind(vault) as (name: string) => unknown;
+    probed.getConfig = (name) => getConfig(name);
+  }
+  if ("config" in vault) {
+    probed.config = vault.config;
+  }
+  return probed;
+}
+
+async function renameKeepingLinks(
+  app: App,
+  file: TAbstractFile,
+  newPath: string,
+): Promise<void> {
+  if (typeof app.fileManager.renameFile === "function") {
+    await app.fileManager.renameFile(file, newPath);
+    return;
+  }
+  await app.vault.rename(file, newPath);
+}
+
+async function revealLeaf(
+  workspace: Workspace,
+  leaf: WorkspaceLeaf,
+): Promise<void> {
+  if (typeof workspace.revealLeaf === "function") {
+    await workspace.revealLeaf(leaf);
+    return;
+  }
+  const workspaceWithLegacyFocus = workspace as unknown as {
+    setActiveLeaf: (
+      leaf: WorkspaceLeaf,
+      pushHistory: boolean,
+      focus: boolean,
+    ) => void;
+  };
+  workspaceWithLegacyFocus.setActiveLeaf(leaf, false, true);
+}
+
+function scanFromApp(app: App): DocumentNode[] {
+  const entries: VaultEntry[] = [];
+  for (const entry of app.vault.getAllLoadedFiles()) {
+    const path = normalizePath(entry.path);
+    if (path === "") {
+      continue;
+    }
+    entries.push({
+      kind: isFolder(entry) ? "folder" : "file",
+      path,
+    });
+  }
+  return scanDocuments(entries);
+}
+
+async function syncDocumentMetadata(
+  app: App,
+  nodes: readonly DocumentNode[],
+): Promise<void> {
+  for (const node of nodes) {
+    await syncDocumentNode(app, node);
+    await syncDocumentMetadata(app, node.children);
+  }
+}
+
+async function syncDocumentNode(app: App, node: DocumentNode): Promise<void> {
+  const file = getFile(app, node.indexPath);
+  if (file === null) {
+    return;
+  }
+  try {
+    const content = await app.vault.read(file);
+    const next = transformDocumentIndex(content, node);
+    if (next === content) {
+      return;
+    }
+    const latest = await app.vault.read(file);
+    const toWrite =
+      latest === content ? next : transformDocumentIndex(latest, node);
+    if (toWrite !== latest) {
+      await app.vault.modify(file, toWrite);
+    }
+  } catch (error) {
+    if (
+      error instanceof FrontmatterParseError ||
+      error instanceof ChildrenLinksError
+    ) {
+      new Notice(`文档元数据异常，未写入任何更改：${errorMessage(error)}`);
+      return;
+    }
+    throw error;
+  }
+}
+
+function transformDocumentIndex(content: string, node: DocumentNode): string {
+  const withFrontmatter = ensureDocumentFrontmatter(content, {
+    name: node.name,
+    created: formatIso8601(new Date()),
+  });
+  return updateChildrenLinks(withFrontmatter, node.path, node.children);
+}
+
+function resolveActiveIndexDocument(
+  app: App,
+  filePath: string | null,
+): string | null {
+  if (filePath === null) {
+    return null;
+  }
+  const normalized = normalizePath(filePath);
+  if (getName(normalized) !== "index.md") {
+    return null;
+  }
+  const parent = getParentPath(normalized);
+  return parent !== null && isCompleteDocument(app, parent) ? parent : null;
+}
+
+function resolveDocumentPath(app: App, filePath: string | null): string | null {
+  if (filePath === null) {
+    return null;
+  }
+  const normalized = normalizePath(filePath);
+  if (getName(normalized) === "index.md") {
+    const parent = getParentPath(normalized);
+    return parent !== null && isCompleteDocument(app, parent) ? parent : null;
+  }
+  let current = getParentPath(normalized);
+  while (current !== null) {
+    if (getName(current) === "attachments") {
+      current = getParentPath(current);
+      continue;
+    }
+    if (isCompleteDocument(app, current)) {
+      return current;
+    }
+    current = getParentPath(current);
+  }
+  return null;
+}
+
+function isCompleteDocument(app: App, path: string): boolean {
+  const normalized = normalizePath(path);
+  if (
+    normalized === "" ||
+    getName(normalized) === "attachments" ||
+    hasAttachmentsAncestor(normalized)
+  ) {
+    return false;
+  }
+  return (
+    getFile(app, `${normalized}/index.md`) !== null &&
+    getFolder(app, `${normalized}/attachments`) !== null
+  );
+}
+
+function getFile(app: App, path: string): TFile | null {
+  if (typeof app.vault.getFileByPath === "function") {
+    return app.vault.getFileByPath(path);
+  }
+  const found = app.vault.getAbstractFileByPath(path);
+  return found !== null && isFile(found) ? found : null;
+}
+
+function getFolder(app: App, path: string): TFolder | null {
+  if (typeof app.vault.getFolderByPath === "function") {
+    return app.vault.getFolderByPath(path);
+  }
+  const found = app.vault.getAbstractFileByPath(path);
+  return found !== null && isFolder(found) ? found : null;
+}
+
+function requireFile(app: App, path: string): TFile {
+  const file = getFile(app, path);
+  if (file === null) {
+    throw new Error(`File not found: ${path}`);
+  }
+  return file;
+}
+
+function requireAbstract(app: App, path: string): TAbstractFile {
+  const file = app.vault.getAbstractFileByPath(path);
+  if (file === null) {
+    throw new Error(`File not found: ${path}`);
+  }
+  return file;
+}
+
+function isFolder(file: TAbstractFile): file is TFolder {
+  return "children" in file && Array.isArray((file as { children?: unknown }).children);
+}
+
+function isFile(file: TAbstractFile): file is TFile {
+  return !isFolder(file);
+}
+
+function toAttachmentRef(file: {
+  path: string;
+  name: string;
+  basename?: string;
+  extension?: string;
+}): AttachmentFileRef {
+  const name = file.name;
+  const extension =
+    file.extension ??
+    (name.includes(".") ? name.slice(name.lastIndexOf(".") + 1) : "");
+  const basename =
+    file.basename ??
+    (extension === "" ? name : name.slice(0, name.length - extension.length - 1));
+  return {
+    path: file.path,
+    name,
+    basename,
+    extension,
+  };
+}
+
+function toAttachmentLookup(
+  file: TAbstractFile | null,
+): AttachmentFileRef | null {
+  if (file === null) {
+    return null;
+  }
+  if (isFile(file)) {
+    return toAttachmentRef(file);
+  }
+  return {
+    path: file.path,
+    name: file.name,
+    basename: file.name,
+    extension: "",
+  };
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function getName(path: string): string {
+  const normalized = normalizePath(path);
+  const idx = normalized.lastIndexOf("/");
+  return idx === -1 ? normalized : normalized.slice(idx + 1);
+}
+
+function getParentPath(path: string): string | null {
+  const normalized = normalizePath(path);
+  const idx = normalized.lastIndexOf("/");
+  return idx === -1 ? null : normalized.slice(0, idx);
+}
+
+function hasAttachmentsAncestor(path: string): boolean {
+  let current = getParentPath(path);
+  while (current !== null) {
+    if (getName(current) === "attachments") {
+      return true;
+    }
+    current = getParentPath(current);
+  }
+  return false;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+class SingleFlight {
+  private running = false;
+  private pending = false;
+  private current: Promise<void> = Promise.resolve();
+
+  constructor(private readonly task: () => Promise<void>) {}
+
+  request(): Promise<void> {
+    this.pending = true;
+    if (this.running) {
+      return this.current;
+    }
+    this.running = true;
+    this.current = this.drain().finally(() => {
+      this.running = false;
+    });
+    return this.current;
+  }
+
+  private async drain(): Promise<void> {
+    do {
+      this.pending = false;
+      await this.task();
+    } while (this.pending);
+  }
+}
+
+class CommandNameModal extends Modal {
+  constructor(
+    app: App,
+    private readonly heading: string,
+    private readonly onSubmit: (name: string) => void,
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    this.modalEl.classList.add("nestnote-modal");
+    this.setTitle(this.heading);
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.setAttribute("aria-label", "文档名称");
+
+    const submit = (): void => {
+      const name = input.value.trim();
+      if (name === "") {
+        return;
+      }
+      this.onSubmit(name);
+      this.close();
+    };
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        submit();
+      }
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "nestnote-modal-actions";
+    actions.append(
+      iconButton("check", "确认", (event) => {
+        event.preventDefault();
+        submit();
+      }),
+      iconButton("x", "取消", () => {
+        this.close();
+      }),
+    );
+
+    this.contentEl.append(input, actions);
+    input.focus();
+  }
+
+  onClose(): void {
+    this.contentEl.replaceChildren();
+  }
+}
+
+function iconButton(
+  icon: string,
+  label: string,
+  onClick: (event: MouseEvent) => void,
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "nestnote-icon-button";
+  button.setAttribute("aria-label", label);
+  setIcon(button, icon);
+  button.addEventListener("click", onClick);
+  return button;
+}

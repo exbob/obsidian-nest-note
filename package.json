@@ -1,0 +1,19 @@
+{
+  "name": "nest-note",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node esbuild.config.mjs development",
+    "build": "node esbuild.config.mjs production",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "esbuild": "latest",
+    "happy-dom": "latest",
+    "obsidian": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}

@@ -1,0 +1,265 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { WorkspaceLeaf } from "obsidian";
+import {
+  DocumentTreeView,
+  VIEW_TYPE_NESTNOTE,
+} from "../src/ui/document-tree-view";
+import type { DocumentNode, DocumentService } from "../src/types";
+import { DocumentServiceError } from "../src/services/document-service";
+
+function node(
+  name: string,
+  path: string,
+  children: DocumentNode[] = [],
+): DocumentNode {
+  return {
+    name,
+    path,
+    indexPath: `${path}/index.md`,
+    attachmentsPath: `${path}/attachments`,
+    children,
+  };
+}
+
+const sampleTree: DocumentNode[] = [
+  node("Work", "Work", [node("Notes", "Work/Notes")]),
+  node("Inbox", "Inbox"),
+];
+
+interface MountOptions {
+  nodes?: readonly DocumentNode[];
+  documents?: Partial<DocumentService>;
+}
+
+async function mount(options: MountOptions = {}) {
+  const documents: DocumentService = {
+    create: vi.fn().mockResolvedValue(node("Work", "Work")),
+    rename: vi.fn().mockResolvedValue(node("Work", "Work")),
+    trash: vi.fn().mockResolvedValue(undefined),
+    open: vi.fn().mockResolvedValue(undefined),
+    ...options.documents,
+  };
+  const requestRefresh = vi.fn();
+  const notice = vi.fn();
+  const nodes = options.nodes ?? sampleTree;
+  const view = new DocumentTreeView({ app: {} } as unknown as WorkspaceLeaf, {
+    documents,
+    getNodes: () => nodes,
+    requestRefresh,
+    notice,
+  });
+  await view.onOpen();
+  document.body.appendChild(view.contentEl);
+  return { view, documents, requestRefresh, notice };
+}
+
+function row(path: string): HTMLElement {
+  const el = document.querySelector(`[data-path="${path}"]`);
+  if (!(el instanceof HTMLElement)) {
+    throw new Error(`missing node ${path}`);
+  }
+  return el;
+}
+
+function action(path: string, label: string): HTMLElement {
+  const button = row(path).querySelector(`[aria-label="${label}"]`);
+  if (!(button instanceof HTMLElement)) {
+    throw new Error(`missing ${label} on ${path}`);
+  }
+  return button;
+}
+
+function toolbar(label: string): HTMLElement {
+  const button = document.querySelector(
+    `.nestnote-toolbar [aria-label="${label}"]`,
+  );
+  if (!(button instanceof HTMLElement)) {
+    throw new Error(`missing toolbar ${label}`);
+  }
+  return button;
+}
+
+async function confirmModal(name?: string): Promise<void> {
+  const modal = document.querySelector(".nestnote-modal");
+  if (!(modal instanceof HTMLElement)) {
+    throw new Error("modal was not opened");
+  }
+  if (name !== undefined) {
+    const input = modal.querySelector("input");
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error("name input missing");
+    }
+    input.value = name;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  const confirm = modal.querySelector('[aria-label="确认"]');
+  if (!(confirm instanceof HTMLElement)) {
+    throw new Error("confirm button missing");
+  }
+  confirm.click();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+afterEach(async () => {
+  document.body.replaceChildren();
+});
+
+describe("DocumentTreeView", () => {
+  it("reports the NestNote view type and display text", async () => {
+    const { view } = await mount({ nodes: [] });
+    expect(view.getViewType()).toBe(VIEW_TYPE_NESTNOTE);
+    expect(view.getViewType()).toBe("nestnote-document-tree");
+    expect(view.getDisplayText()).toBe("NestNote");
+  });
+
+  it("renders each document name in a nested tree", async () => {
+    const { view } = await mount();
+    const names = [...view.contentEl.querySelectorAll("[data-path]")].map(
+      (el) => el.getAttribute("data-path"),
+    );
+    expect(names).toEqual(["Work", "Work/Notes", "Inbox"]);
+    expect(row("Work").textContent).toContain("Work");
+    expect(row("Work/Notes").textContent).toContain("Notes");
+    expect(row("Inbox").textContent).toContain("Inbox");
+    expect(row("Work/Notes").closest('[data-path="Work"]')).toBe(row("Work"));
+    expect(row("Inbox").closest('[data-path="Work"]')).toBeNull();
+  });
+
+  it("opens a document when its name is clicked", async () => {
+    const { documents } = await mount();
+    const name = row("Work/Notes").querySelector(".nestnote-name");
+    if (!(name instanceof HTMLElement)) {
+      throw new Error("name missing");
+    }
+    name.click();
+    await Promise.resolve();
+    expect(documents.open).toHaveBeenCalledWith("Work/Notes");
+  });
+
+  it("opens a document from the node open action", async () => {
+    const { documents } = await mount();
+    action("Inbox", "打开").click();
+    await Promise.resolve();
+    expect(documents.open).toHaveBeenCalledWith("Inbox");
+  });
+
+  it("creates a root document with a null parent path", async () => {
+    const { documents, requestRefresh } = await mount();
+    toolbar("新建文档").click();
+    await confirmModal("Journal");
+    expect(documents.create).toHaveBeenCalledWith(null, "Journal");
+    expect(requestRefresh).toHaveBeenCalled();
+  });
+
+  it("creates a child document from a node action", async () => {
+    const { documents } = await mount();
+    action("Work", "新建子文档").click();
+    await confirmModal("Drafts");
+    expect(documents.create).toHaveBeenCalledWith("Work", "Drafts");
+    expect(documents.open).not.toHaveBeenCalled();
+  });
+
+  it("renames a document from a node action", async () => {
+    const { documents } = await mount();
+    action("Inbox", "重命名").click();
+    await confirmModal("Archive");
+    expect(documents.rename).toHaveBeenCalledWith("Inbox", "Archive");
+  });
+
+  it("trashes a document after modal confirmation about the subtree", async () => {
+    const { documents } = await mount();
+    action("Work", "删除").click();
+    const modal = document.querySelector(".nestnote-modal");
+    expect(modal?.textContent).toMatch(/整个子树/);
+    expect(modal?.textContent).toMatch(/回收站/);
+    await confirmModal();
+    expect(documents.trash).toHaveBeenCalledWith("Work");
+  });
+
+  it("keeps expand and selection after a refresh when nodes still exist", async () => {
+    const { view } = await mount();
+    action("Work", "展开").click();
+    const name = row("Work/Notes").querySelector(".nestnote-name");
+    if (!(name instanceof HTMLElement)) {
+      throw new Error("name missing");
+    }
+    name.click();
+    expect(row("Work").classList.contains("is-expanded")).toBe(true);
+    expect(row("Work/Notes").classList.contains("is-selected")).toBe(true);
+
+    view.render(sampleTree);
+    expect(row("Work").classList.contains("is-expanded")).toBe(true);
+    expect(row("Work/Notes").classList.contains("is-selected")).toBe(true);
+  });
+
+  it("does not restore expand or selection for nodes that disappeared", async () => {
+    const { view } = await mount();
+    action("Work", "展开").click();
+    const name = row("Work/Notes").querySelector(".nestnote-name");
+    if (!(name instanceof HTMLElement)) {
+      throw new Error("name missing");
+    }
+    name.click();
+
+    view.render([node("Inbox", "Inbox")]);
+    expect(document.querySelector('[data-path="Work"]')).toBeNull();
+    expect(document.querySelector('[data-path="Work/Notes"]')).toBeNull();
+    expect(row("Inbox").classList.contains("is-selected")).toBe(false);
+    expect(row("Inbox").classList.contains("is-expanded")).toBe(false);
+  });
+
+  it("labels toolbar and node actions for accessibility and icons", async () => {
+    await mount();
+    for (const label of ["新建文档", "刷新"]) {
+      const button = toolbar(label);
+      expect(button.tagName).toBe("BUTTON");
+      expect(button.dataset.icon).toBeTruthy();
+    }
+    for (const label of ["打开", "新建子文档", "重命名", "删除"]) {
+      const button = action("Work", label);
+      expect(button.tagName).toBe("BUTTON");
+      expect(button.dataset.icon).toBeTruthy();
+    }
+    expect(action("Work", "展开").dataset.icon).toBeTruthy();
+  });
+
+  it("requests a refresh from the toolbar without changing local tree state", async () => {
+    const { requestRefresh } = await mount();
+    action("Work", "展开").click();
+    toolbar("刷新").click();
+    expect(requestRefresh).toHaveBeenCalled();
+    expect(row("Work").classList.contains("is-expanded")).toBe(true);
+  });
+
+  it("keeps sidebar state and notifies when trash fails", async () => {
+    const { documents, requestRefresh, notice } = await mount({
+      documents: {
+        trash: vi.fn().mockRejectedValue(new Error("trash failed")),
+      },
+    });
+    action("Work", "展开").click();
+    action("Work", "删除").click();
+    await confirmModal();
+    expect(documents.trash).toHaveBeenCalledWith("Work");
+    expect(requestRefresh).not.toHaveBeenCalled();
+    expect(notice).toHaveBeenCalled();
+    expect(row("Work").classList.contains("is-expanded")).toBe(true);
+  });
+
+  it("does not notify again when DocumentService already showed the error", async () => {
+    const alreadyNoticed = Object.assign(
+      new DocumentServiceError("already shown"),
+      { noticed: true },
+    );
+    const { documents, notice } = await mount({
+      documents: {
+        trash: vi.fn().mockRejectedValue(alreadyNoticed),
+      },
+    });
+    action("Work", "删除").click();
+    await confirmModal();
+    expect(documents.trash).toHaveBeenCalledWith("Work");
+    expect(notice).not.toHaveBeenCalled();
+  });
+});
