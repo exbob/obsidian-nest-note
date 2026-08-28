@@ -174,7 +174,7 @@ export default class NestNotePlugin extends Plugin {
     let leaf = existing[0];
     if (leaf === undefined) {
       leaf =
-        this.app.workspace.getRightLeaf(true) ??
+        this.app.workspace.getLeftLeaf(false) ??
         this.app.workspace.getLeaf(true);
       await leaf.setViewState({ type: VIEW_TYPE_NESTNOTE, active: true });
     }

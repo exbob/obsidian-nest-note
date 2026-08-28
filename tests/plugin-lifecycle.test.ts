@@ -212,6 +212,8 @@ class FakeWorkspace {
   getViewCreator: ((type: string) => ((leaf: WorkspaceLeaf) => unknown) | undefined) | undefined;
   getRightLeafSplits: boolean[] = [];
   readonly rightSidebarLeaves: FakeLeaf[] = [];
+  getLeftLeafSplits: boolean[] = [];
+  readonly leftSidebarLeaves: FakeLeaf[] = [];
   opened: string[] = [];
   lastNewLeaf: boolean | undefined;
 
@@ -249,6 +251,17 @@ class FakeWorkspace {
     const leaf = new FakeLeaf(this);
     this.leaves.push(leaf);
     this.rightSidebarLeaves.push(leaf);
+    return leaf;
+  }
+
+  getLeftLeaf(split: boolean): FakeLeaf {
+    this.getLeftLeafSplits.push(split);
+    if (!split && this.leftSidebarLeaves[0] !== undefined) {
+      return this.leftSidebarLeaves[0];
+    }
+    const leaf = new FakeLeaf(this);
+    this.leaves.push(leaf);
+    this.leftSidebarLeaves.push(leaf);
     return leaf;
   }
 
@@ -551,7 +564,7 @@ name: Work
     expect(content).not.toMatch(/created: [^\n]*Z/);
   });
 
-  it("reuses an existing sidebar leaf and otherwise creates a right leaf", async () => {
+  it("reuses an existing sidebar leaf and otherwise uses the full left panel", async () => {
     const app = createApp();
     const plugin = loadPlugin(app);
     await plugin.onload();
@@ -559,7 +572,7 @@ name: Work
     await plugin.activateView();
     expect(app.workspace.getLeavesOfType(VIEW_TYPE_NESTNOTE)).toHaveLength(1);
     expect(app.workspace.revealCalls).toHaveLength(1);
-    expect(app.workspace.getRightLeafSplits).toEqual([true]);
+    expect(app.workspace.getLeftLeafSplits).toEqual([false]);
     const first = app.workspace.revealCalls[0];
 
     await plugin.activateView();
@@ -597,19 +610,19 @@ name: Work
     app.workspace.revealLeaf = revealLeaf;
   });
 
-  it("does not replace an existing right sidebar view when opening NestNote", async () => {
+  it("uses the existing left sidebar panel when opening NestNote", async () => {
     const app = createApp();
     const plugin = loadPlugin(app);
     await plugin.onload();
-    const existing = app.workspace.getRightLeaf(false);
+    const existing = app.workspace.getLeftLeaf(false);
     existing.viewType = "markdown";
 
     await plugin.activateView();
 
-    expect(existing.viewType).toBe("markdown");
+    expect(existing.viewType).toBe(VIEW_TYPE_NESTNOTE);
     expect(app.workspace.getLeavesOfType(VIEW_TYPE_NESTNOTE)).toHaveLength(1);
-    const splits = app.workspace.getRightLeafSplits;
-    expect(splits[splits.length - 1]).toBe(true);
+    const splits = app.workspace.getLeftLeafSplits;
+    expect(splits[splits.length - 1]).toBe(false);
   });
 
   it("archives created attachments with fileManager.renameFile", async () => {
