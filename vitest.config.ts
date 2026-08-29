@@ -9,5 +9,6 @@ export default defineConfig({
   },
   test: {
     environment: "happy-dom",
+    setupFiles: ["./tests/i18n-setup.ts"],
   },
 });
