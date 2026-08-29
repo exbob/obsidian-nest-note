@@ -1,4 +1,5 @@
 import { Modal, Notice, Plugin, setIcon } from "obsidian";
+import { t } from "./i18n";
 import type {
   App,
   TAbstractFile,
@@ -132,26 +133,26 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
 
     this.addCommand({
       id: COMMAND_IDS.openDocumentTree,
-      name: "打开文档树",
+      name: t("command.openDocumentTree"),
       callback: () => {
         this.openDocumentTree();
       },
     });
     this.addCommand({
       id: COMMAND_IDS.newDocument,
-      name: "新建文档",
+      name: t("command.newDocument"),
       callback: () => {
         this.promptAndCreate(null);
       },
     });
     this.addCommand({
       id: COMMAND_IDS.newChildDocument,
-      name: "新建子文档",
+      name: t("command.newChildDocument"),
       callback: () => {
         const active = this.app.workspace.getActiveFile();
         const parent = resolveActiveIndexDocument(this.app, active?.path ?? null);
         if (parent === null) {
-          notify("请先打开一个 NestNote 文档再新建子文档");
+          notify(t("notice.openChildRequiresDocument"));
           return;
         }
         this.promptAndCreate(parent);
@@ -159,14 +160,14 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
     });
     this.addCommand({
       id: COMMAND_IDS.refresh,
-      name: "刷新",
+      name: t("command.refresh"),
       callback: () => {
         void this.scanAndSync();
       },
     });
     this.addCommand({
       id: COMMAND_IDS.archiveCurrentAttachment,
-      name: "归档当前附件",
+      name: t("command.archiveCurrentAttachment"),
       callback: () => {
         void this.archiveCurrentAttachment();
       },
@@ -225,7 +226,10 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
   }
 
   private promptAndCreate(parentPath: string | null): void {
-    const title = parentPath === null ? "新建文档" : "新建子文档";
+    const title =
+      parentPath === null
+        ? t("command.newDocument")
+        : t("command.newChildDocument");
     new CommandNameModal(this.app, title, (name) => {
       void this.runAction(() => this.documents.create(parentPath, name));
     }).open();
@@ -234,17 +238,17 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
   private async archiveCurrentAttachment(): Promise<void> {
     const active = this.app.workspace.getActiveFile();
     if (active === null) {
-      new Notice("无法判断附件归属，当前没有活动文件");
+      new Notice(t("notice.attachmentNoActiveFile"));
       return;
     }
     const documentPath = resolveDocumentPath(this.app, active.path);
     if (documentPath === null) {
-      new Notice(`无法判断附件归属，已保留原位置：${active.path}`);
+      new Notice(t("notice.attachmentKept", { path: active.path }));
       return;
     }
     const index = getFile(this.app, `${documentPath}/index.md`);
     if (index === null) {
-      new Notice(`无法判断附件归属，已保留原位置：${active.path}`);
+      new Notice(t("notice.attachmentKept", { path: active.path }));
       return;
     }
     this.attachmentActiveFile = toAttachmentRef(index);
@@ -580,7 +584,7 @@ async function syncDocumentNode(app: App, node: DocumentNode): Promise<void> {
       error instanceof FrontmatterParseError ||
       error instanceof ChildrenLinksError
     ) {
-      new Notice(`文档元数据异常，未写入任何更改：${errorMessage(error)}`);
+      new Notice(t("notice.metadataUnchanged", { detail: errorMessage(error) }));
       return;
     }
     throw error;
@@ -803,7 +807,7 @@ class CommandNameModal extends Modal {
 
     const input = document.createElement("input");
     input.type = "text";
-    input.setAttribute("aria-label", "文档名称");
+    input.setAttribute("aria-label", t("ui.documentName"));
 
     let submitted = false;
     const submit = (): void => {
@@ -829,11 +833,11 @@ class CommandNameModal extends Modal {
     const actions = document.createElement("div");
     actions.className = "nestnote-modal-actions";
     actions.append(
-      iconButton("check", "确认", (event) => {
+      iconButton("check", t("ui.confirm"), (event) => {
         event.preventDefault();
         submit();
       }),
-      iconButton("x", "取消", () => {
+      iconButton("x", t("ui.cancel"), () => {
         this.close();
       }),
     );

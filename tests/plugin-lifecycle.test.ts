@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { App, PluginManifest, WorkspaceLeaf } from "obsidian";
 import { Notice } from "obsidian";
+import { t } from "../src/i18n";
 import NestNotePlugin from "../src/main";
 import {
   DEFAULT_NESTNOTE_SETTINGS,
@@ -469,7 +470,7 @@ async function confirmNameModal(name: string): Promise<void> {
   }
   input.value = name;
   input.dispatchEvent(new Event("input", { bubbles: true }));
-  const confirm = modal.querySelector('[aria-label="确认"]');
+  const confirm = modal.querySelector(`[aria-label="${t("ui.confirm")}"]`);
   if (!(confirm instanceof HTMLElement)) {
     throw new Error("confirm button missing");
   }
@@ -480,13 +481,13 @@ async function confirmNameModal(name: string): Promise<void> {
 
 function clickTrashFromMore(path: string): void {
   const more = document.querySelector(
-    `[data-path="${path}"] [aria-label="更多"]`,
+    `[data-path="${path}"] [aria-label="${t("ui.more")}"]`,
   );
   if (!(more instanceof HTMLElement)) {
     throw new Error("more action missing");
   }
   more.click();
-  const trash = document.querySelector('.menu [aria-label="删除"]');
+  const trash = document.querySelector(`.menu [aria-label="${t("ui.delete")}"]`);
   if (!(trash instanceof HTMLElement)) {
     throw new Error("trash action missing");
   }
@@ -732,7 +733,7 @@ created: 2020-01-01T00:00:00Z
     ).toBe(true);
     expect(
       noticeHarness().messages.some((message) =>
-        message.includes("设置保存失败"),
+        message.startsWith(t("setting.saveFailed", { detail: "" })),
       ),
     ).toBe(false);
   });
@@ -770,7 +771,7 @@ created: 2020-01-01T00:00:00Z
     ).toBe(true);
     expect(
       noticeHarness().messages.some((message) =>
-        message.includes("设置保存失败"),
+        message.startsWith(t("setting.saveFailed", { detail: "" })),
       ),
     ).toBe(false);
     expect(plugin.settings.maxChildDepth).toBe(1);
@@ -976,7 +977,7 @@ created: 2020-01-01T00:00:00Z
 
     await plugin.activateView();
     clickTrashFromMore("Work");
-    const confirm = document.querySelector('.nestnote-modal [aria-label="确认"]');
+    const confirm = document.querySelector(`.nestnote-modal [aria-label="${t("ui.confirm")}"]`);
     if (!(confirm instanceof HTMLElement)) {
       throw new Error("confirm missing");
     }
@@ -1004,7 +1005,7 @@ created: 2020-01-01T00:00:00Z
 
     await plugin.activateView();
     clickTrashFromMore("Work");
-    const confirm = document.querySelector('.nestnote-modal [aria-label="确认"]');
+    const confirm = document.querySelector(`.nestnote-modal [aria-label="${t("ui.confirm")}"]`);
     if (!(confirm instanceof HTMLElement)) {
       throw new Error("confirm missing");
     }
@@ -1028,9 +1029,9 @@ created: 2020-01-01T00:00:00Z
     await confirmNameModal("..");
     await settle();
 
-    expect(
-      noticeHarness().messages.some((message) => message.includes("无效")),
-    ).toBe(true);
+    expect(noticeHarness().messages).toContain(
+      t("error.nameInvalid", { name: ".." }),
+    );
   });
 
   it("shares internal write protection so vault events do not refresh forever", async () => {
@@ -1070,7 +1071,7 @@ created: 2020-01-01T00:00:00Z
     if (!(input instanceof HTMLInputElement)) {
       throw new Error("input missing");
     }
-    const confirm = modal?.querySelector('[aria-label="确认"]');
+    const confirm = modal?.querySelector(`[aria-label="${t("ui.confirm")}"]`);
     if (!(confirm instanceof HTMLElement)) {
       throw new Error("confirm missing");
     }
