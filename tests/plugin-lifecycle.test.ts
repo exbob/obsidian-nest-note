@@ -412,9 +412,9 @@ function seedDocument(
 const manifest: PluginManifest = {
   id: "nest-note",
   name: "NestNote",
-  "version": "1.0.0",
-  minAppVersion: "1.5.0",
-  description: "Treat folders as nested documents in Obsidian.",
+  "version": "1.0.1",
+  minAppVersion: "1.7.2",
+  description: "Treat folders as nested documents.",
   author: "LiShaocheng",
   authorUrl: "https://shaocheng.li",
 };
@@ -516,7 +516,7 @@ describe("NestNotePlugin assembly", () => {
 
     await plugin.onload();
 
-    expect(plugin.manifest.minAppVersion).toBe("1.5.0");
+    expect(plugin.manifest.minAppVersion).toBe("1.7.2");
     expect(harness(plugin).views.has(VIEW_TYPE_NESTNOTE)).toBe(true);
     expect(harness(plugin).ribbonIcons).toEqual([
       expect.objectContaining({ title: "NestNote" }),
@@ -874,20 +874,6 @@ name: Work
     ).toBe(true);
   });
 
-  it("falls back to setActiveLeaf when revealLeaf is unavailable", async () => {
-    const app = createApp();
-    const plugin = loadPlugin(app);
-    await plugin.onload();
-    const revealLeaf = app.workspace.revealLeaf.bind(app.workspace);
-    (app.workspace as { revealLeaf?: unknown }).revealLeaf = undefined;
-
-    await plugin.activateView();
-
-    expect(app.workspace.setActiveLeafCalls).toHaveLength(1);
-    expect(app.workspace.setActiveLeafFocusArgs).toEqual([false, true]);
-    app.workspace.revealLeaf = revealLeaf;
-  });
-
   it("uses the existing left sidebar panel when opening NestNote", async () => {
     const app = createApp();
     const plugin = loadPlugin(app);
@@ -934,36 +920,6 @@ created: 2020-01-01T00:00:00Z
     );
   });
 
-  it("falls back to vault.rename when fileManager.renameFile is missing", async () => {
-    vi.useFakeTimers();
-    const app = createApp((vault, workspace) => {
-      seedDocument(
-        vault,
-        "Work",
-        `---
-name: Work
-created: 2020-01-01T00:00:00Z
----
-`,
-      );
-      workspace.activeFile = fileRef("Work/index.md");
-    });
-    app.fileManager.renameFile = undefined;
-    const plugin = loadPlugin(app);
-    await plugin.onload();
-    app.workspace.markReady();
-    await settle();
-    app.vault.renameCalls.length = 0;
-
-    await app.vault.create("Work/photo.png", "png-bytes");
-    await settle();
-
-    expect(app.fileManager.renameFileCalls).toEqual([]);
-    expect(app.vault.renameCalls).toEqual([
-      { from: "Work/photo.png", to: "Work/attachments/photo.png" },
-    ]);
-  });
-
   it("does not call vault.trashFile and uses fileManager.trashFile for document trash", async () => {
     vi.useFakeTimers();
     const app = createApp();
@@ -989,33 +945,6 @@ created: 2020-01-01T00:00:00Z
     expect(app.vault.trashFileCalls).toEqual([]);
     expect(app.vault.trashLocalCalls).toEqual([]);
     expect(app.vault.getFolderByPath("Work")).toBeNull();
-  });
-
-  it("falls back to vault.trash(folder, false) when fileManager.trashFile is missing", async () => {
-    vi.useFakeTimers();
-    const app = createApp();
-    app.fileManager.trashFile = undefined;
-    const plugin = loadPlugin(app);
-    await plugin.onload();
-    app.workspace.markReady();
-    await settle();
-
-    command(plugin, "nestnote:new-document")();
-    await confirmNameModal("Work");
-    await settle();
-
-    await plugin.activateView();
-    clickTrashFromMore("Work");
-    const confirm = document.querySelector(`.nestnote-modal [aria-label="${t("ui.confirm")}"]`);
-    if (!(confirm instanceof HTMLElement)) {
-      throw new Error("confirm missing");
-    }
-    confirm.click();
-    await settle();
-
-    expect(app.fileManager.trashFileCalls).toEqual([]);
-    expect(app.vault.trashLocalCalls).toEqual([{ path: "Work", system: false }]);
-    expect(app.vault.trashFileCalls).toEqual([]);
   });
 
   it("notifies DocumentService and view errors through Notice", async () => {

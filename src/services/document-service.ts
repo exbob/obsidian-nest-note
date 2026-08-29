@@ -55,7 +55,7 @@ export interface DocumentServiceApp {
     getFileByPath(path: string): DocumentFileRef | null;
     getAllLoadedFiles(): LoadedVaultEntry[];
   };
-  fileManager?: {
+  fileManager: {
     trashFile(file: DocumentFileRef): Promise<void>;
   };
   workspace: {
@@ -377,11 +377,7 @@ export class NestNoteDocumentService implements DocumentService {
   }
 
   private async trashFolder(folder: DocumentFileRef): Promise<void> {
-    if (this.app.fileManager?.trashFile !== undefined) {
-      await this.app.fileManager.trashFile(folder);
-      return;
-    }
-    await this.app.vault.trash(folder, false);
+    await this.app.fileManager.trashFile(folder);
   }
 
   private requireScannedNode(path: string): DocumentNode {

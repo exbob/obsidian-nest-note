@@ -6,7 +6,7 @@ NestNote 是一个 [Obsidian](https://obsidian.md/) 插件，将 **文件夹即�
 
 - **显示名称：** NestNote
 - **插件 ID：** `nest-note`
-- **最低 Obsidian 版本：** 1.5.0
+- **最低 Obsidian 版本：** 1.7.2
 - **界面语言：** 跟随 Obsidian 应用语言。简体中文和繁体中文显示简体中文，其他语言显示英文。
 
 ## 安装
@@ -35,7 +35,7 @@ npm install
 ## 提交到 Obsidian 社区插件
 
 1. 确保 GitHub 仓库为公开仓库，并包含根目录下的 `README.md`、`LICENSE` 和 `manifest.json`。
-2. 运行 `bash build.sh`，使用 `nest-note/` 中的 `main.js`、`manifest.json` 和 `styles.css` 创建 GitHub Release。Release 标签必须与 `manifest.json` 的 `version` 完全一致（例如 `1.0.0`，不要加 `v`）。
+2. 运行 `bash build.sh`，使用 `nest-note/` 中的 `main.js`、`manifest.json` 和 `styles.css` 创建 GitHub Release。Release 标签必须与 `manifest.json` 的 `version` 完全一致（例如 `1.0.1`，不要加 `v`）。
 3. 登录 [Obsidian Community](https://community.obsidian.md/)，关联 GitHub 账号，提交仓库 `exbob/obsidian-nest-note` 进行自动审核。
 
 后续版本只需更新 `manifest.json` 的版本号、推送代码，并创建相同标签的新 GitHub Release；不需要重复提交社区目录。详见 [Obsidian 插件发布文档](https://docs.obsidian.md/plugins/releasing/submit-plugin)。
@@ -189,7 +189,7 @@ created: 2026-08-28T19:00:00+08:00
 
 - **任何删除操作前均显示确认提示**（无论文档是否含子文档）
 - 确认后将 **整个文档目录**（含 `index.md`、附件和所有子文档）移入 Obsidian 回收站
-- 优先使用 `fileManager.trashFile`；Obsidian 版本不支持时回退 `vault.trash(folder, false)`（本地回收站）
+- 删除使用 `fileManager.trashFile`，遵循用户的文件删除偏好（系统回收站或 `.trash/`）
 - 从回收站恢复目录后，插件在 Vault 事件触发后自动全量重新扫描并重新识别
 - 删除失败时保留侧边栏状态并显示错误 Notice
 
@@ -264,7 +264,7 @@ bash build.sh         # 成功后写入 nest-note/
   - 侧边栏文档行「新建子文档」以该行文档为父节点
   - 命令 `nestnote:new-child-document` 须先打开父文档 `index.md`，按当前活动文件所属文档创建，不读取侧边栏选中态
 - 附件自动归档仅在能安全关联到当前活动 `index.md` 时触发：允许来源为当前文档目录直接子文件、Vault 根目录、或解析后的 `attachmentFolderPath`（含 `./` 相对路径）；`getNewFileParent(sourcePath)` 不作为附件目录。其他完整文档目录/`attachments/` 与无法判断的路径绝不移动，Vault 创建事件对此静默保留
-- 删除优先 `fileManager.trashFile`；旧版本 Obsidian 回退 `vault.trash(..., false)`（本地回收站）
+- 删除使用 `fileManager.trashFile`，遵循用户的文件删除偏好
 - **子文档层级：** 超出「最大子文档层级」的完整文档目录仍留在 Vault 中，但扫描结果不显示，也无法通过插件创建更深子文档
 
 ## 项目结构

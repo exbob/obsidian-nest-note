@@ -62,7 +62,7 @@ export class NestNoteVaultEventCoordinator implements VaultEventCoordinator {
   private readonly guard = new InternalOperationGuard();
   private readonly pending = new Set<string>();
   private readonly refs: EventRefLike[] = [];
-  private timer: ReturnType<typeof setTimeout> | undefined;
+  private timer: number | undefined;
   private started = false;
 
   constructor(
@@ -92,7 +92,7 @@ export class NestNoteVaultEventCoordinator implements VaultEventCoordinator {
 
   stop(): void {
     if (this.timer !== undefined) {
-      clearTimeout(this.timer);
+      window.clearTimeout(this.timer);
       this.timer = undefined;
     }
     this.pending.clear();
@@ -192,9 +192,9 @@ export class NestNoteVaultEventCoordinator implements VaultEventCoordinator {
       return;
     }
     if (this.timer !== undefined) {
-      clearTimeout(this.timer);
+      window.clearTimeout(this.timer);
     }
-    this.timer = setTimeout(() => {
+    this.timer = window.setTimeout(() => {
       this.timer = undefined;
       this.flush();
     }, DEBOUNCE_MS);

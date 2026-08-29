@@ -376,17 +376,15 @@ function createDocumentServiceApp(app: App): DocumentServiceApp {
       const found = requireAbstract(app, file.path);
       await renameKeepingLinks(app, found, newPath);
     },
-    delete: async (file, force) => {
-      const found = requireAbstract(app, file.path);
-      await app.vault.delete(found, force);
+    delete: async (file) => {
+      await trashAbstract(app, file.path);
     },
-    trash: async (file, system) => {
-      const found = requireAbstract(app, file.path);
-      await app.vault.trash(found, system);
+    trash: async (file) => {
+      await trashAbstract(app, file.path);
     },
     getAbstractFileByPath: (path) => app.vault.getAbstractFileByPath(path),
-    getFolderByPath: (path) => getFolder(app, path),
-    getFileByPath: (path) => getFile(app, path),
+    getFolderByPath: (path) => app.vault.getFolderByPath(path),
+    getFileByPath: (path) => app.vault.getFileByPath(path),
     getAllLoadedFiles: () =>
       app.vault.getAllLoadedFiles().map((entry) => ({
         path: entry.path,
@@ -394,16 +392,11 @@ function createDocumentServiceApp(app: App): DocumentServiceApp {
       })),
   };
 
-  if (typeof app.fileManager.trashFile !== "function") {
-    return { vault, workspace: createDocumentWorkspace(app) };
-  }
-
   return {
     vault,
     fileManager: {
       trashFile: async (file) => {
-        const found = requireAbstract(app, file.path);
-        await app.fileManager.trashFile(found);
+        await trashAbstract(app, file.path);
       },
     },
     workspace: createDocumentWorkspace(app),
@@ -512,29 +505,14 @@ async function renameKeepingLinks(
   file: TAbstractFile,
   newPath: string,
 ): Promise<void> {
-  if (typeof app.fileManager.renameFile === "function") {
-    await app.fileManager.renameFile(file, newPath);
-    return;
-  }
-  await app.vault.rename(file, newPath);
+  await app.fileManager.renameFile(file, newPath);
 }
 
 async function revealLeaf(
   workspace: Workspace,
   leaf: WorkspaceLeaf,
 ): Promise<void> {
-  if (typeof workspace.revealLeaf === "function") {
-    await workspace.revealLeaf(leaf);
-    return;
-  }
-  const workspaceWithLegacyFocus = workspace as unknown as {
-    setActiveLeaf: (
-      leaf: WorkspaceLeaf,
-      pushHistory: boolean,
-      focus: boolean,
-    ) => void;
-  };
-  workspaceWithLegacyFocus.setActiveLeaf(leaf, false, true);
+  await workspace.revealLeaf(leaf);
 }
 
 function scanFromApp(app: App, maxChildDepth: number): DocumentNode[] {
@@ -653,19 +631,15 @@ function isCompleteDocument(app: App, path: string): boolean {
 }
 
 function getFile(app: App, path: string): TFile | null {
-  if (typeof app.vault.getFileByPath === "function") {
-    return app.vault.getFileByPath(path);
-  }
-  const found = app.vault.getAbstractFileByPath(path);
-  return found !== null && isFile(found) ? found : null;
+  return app.vault.getFileByPath(path);
 }
 
 function getFolder(app: App, path: string): TFolder | null {
-  if (typeof app.vault.getFolderByPath === "function") {
-    return app.vault.getFolderByPath(path);
-  }
-  const found = app.vault.getAbstractFileByPath(path);
-  return found !== null && isFolder(found) ? found : null;
+  return app.vault.getFolderByPath(path);
+}
+
+async function trashAbstract(app: App, path: string): Promise<void> {
+  await app.fileManager.trashFile(requireAbstract(app, path));
 }
 
 function requireFile(app: App, path: string): TFile {
@@ -805,9 +779,10 @@ class CommandNameModal extends Modal {
     this.modalEl.classList.add("nestnote-modal");
     this.setTitle(this.heading);
 
-    const input = document.createElement("input");
-    input.type = "text";
-    input.setAttribute("aria-label", t("ui.documentName"));
+    const input = createEl("input", {
+      type: "text",
+      attr: { "aria-label": t("ui.documentName") },
+    });
 
     let submitted = false;
     const submit = (): void => {
@@ -830,8 +805,7 @@ class CommandNameModal extends Modal {
       }
     });
 
-    const actions = document.createElement("div");
-    actions.className = "nestnote-modal-actions";
+    const actions = createEl("div", { cls: "nestnote-modal-actions" });
     actions.append(
       iconButton("check", t("ui.confirm"), (event) => {
         event.preventDefault();
@@ -856,10 +830,10 @@ function iconButton(
   label: string,
   onClick: (event: MouseEvent) => void,
 ): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "nestnote-icon-button";
-  button.setAttribute("aria-label", label);
+  const button = createEl("button", {
+    cls: "nestnote-icon-button",
+    attr: { type: "button", "aria-label": label },
+  });
   setIcon(button, icon);
   button.addEventListener("click", onClick);
   return button;

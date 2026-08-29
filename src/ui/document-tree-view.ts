@@ -43,8 +43,7 @@ export class DocumentTreeView extends ItemView {
     this.contentEl.replaceChildren();
     this.contentEl.classList.add("nestnote-view");
 
-    const toolbar = document.createElement("div");
-    toolbar.className = "nestnote-toolbar";
+    const toolbar = createEl("div", { cls: "nestnote-toolbar" });
     this.allToggleButton = iconButton("chevrons-down", t("ui.expandAll"), () => {
       this.toggleAllExpanded();
     });
@@ -60,8 +59,7 @@ export class DocumentTreeView extends ItemView {
       }),
     );
 
-    const tree = document.createElement("div");
-    tree.className = "nestnote-tree";
+    const tree = createEl("div", { cls: "nestnote-tree" });
     this.treeEl = tree;
     this.contentEl.append(toolbar, tree);
     this.render(this.options.getNodes());
@@ -89,8 +87,7 @@ export class DocumentTreeView extends ItemView {
   }
 
   private buildList(nodes: readonly DocumentNode[]): HTMLUListElement {
-    const list = document.createElement("ul");
-    list.className = "nestnote-list";
+    const list = createEl("ul", { cls: "nestnote-list" });
     for (const node of nodes) {
       list.append(this.buildNode(node));
     }
@@ -98,8 +95,7 @@ export class DocumentTreeView extends ItemView {
   }
 
   private buildNode(node: DocumentNode): HTMLLIElement {
-    const item = document.createElement("li");
-    item.className = "nestnote-node";
+    const item = createEl("li", { cls: "nestnote-node" });
     item.dataset.path = node.path;
     if (this.expanded.has(node.path)) {
       item.classList.add("is-expanded");
@@ -108,8 +104,7 @@ export class DocumentTreeView extends ItemView {
       item.classList.add("is-selected");
     }
 
-    const row = document.createElement("div");
-    row.className = "nestnote-row";
+    const row = createEl("div", { cls: "nestnote-row" });
 
     if (node.children.length > 0) {
       const expanded = this.expanded.has(node.path);
@@ -124,21 +119,18 @@ export class DocumentTreeView extends ItemView {
         ),
       );
     } else {
-      const spacer = document.createElement("span");
-      spacer.className = "nestnote-twistie-spacer";
+      const spacer = createEl("span", { cls: "nestnote-twistie-spacer" });
       row.append(spacer);
     }
 
-    const name = document.createElement("span");
-    name.className = "nestnote-name";
+    const name = createEl("span", { cls: "nestnote-name" });
     name.textContent = node.name;
     name.addEventListener("click", (event) => {
       event.stopPropagation();
       void this.openDocument(node.path);
     });
 
-    const actions = document.createElement("div");
-    actions.className = "nestnote-actions";
+    const actions = createEl("div", { cls: "nestnote-actions" });
     actions.append(
       iconButton("plus-circle", t("command.newChildDocument"), (event) => {
         event.stopPropagation();
@@ -288,10 +280,11 @@ class NestNoteNameModal extends Modal {
     this.modalEl.classList.add("nestnote-modal");
     this.setTitle(this.heading);
 
-    const input = document.createElement("input");
-    input.type = "text";
-    input.value = this.initial;
-    input.setAttribute("aria-label", t("ui.documentName"));
+    const input = createEl("input", {
+      type: "text",
+      value: this.initial,
+      attr: { "aria-label": t("ui.documentName") },
+    });
 
     let submitted = false;
     const submit = (): void => {
@@ -314,8 +307,7 @@ class NestNoteNameModal extends Modal {
       }
     });
 
-    const actions = document.createElement("div");
-    actions.className = "nestnote-modal-actions";
+    const actions = createEl("div", { cls: "nestnote-modal-actions" });
     actions.append(
       iconButton("check", t("ui.confirm"), (event) => {
         event.preventDefault();
@@ -350,12 +342,12 @@ class NestNoteConfirmModal extends Modal {
     this.modalEl.classList.add("nestnote-modal");
     this.setTitle(this.heading);
 
-    const body = document.createElement("p");
-    body.className = "nestnote-modal-message";
-    body.textContent = this.message;
+    const body = createEl("p", {
+      cls: "nestnote-modal-message",
+      text: this.message,
+    });
 
-    const actions = document.createElement("div");
-    actions.className = "nestnote-modal-actions";
+    const actions = createEl("div", { cls: "nestnote-modal-actions" });
     actions.append(
       iconButton("check", t("ui.confirm"), (event) => {
         event.preventDefault();
@@ -380,10 +372,10 @@ function iconButton(
   label: string,
   onClick: (event: MouseEvent) => void,
 ): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "clickable-icon nestnote-icon-button";
-  button.setAttribute("aria-label", label);
+  const button = createEl("button", {
+    cls: "clickable-icon nestnote-icon-button",
+    attr: { type: "button", "aria-label": label },
+  });
   setIcon(button, icon);
   button.addEventListener("click", onClick);
   return button;

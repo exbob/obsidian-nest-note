@@ -130,6 +130,51 @@ export function setIcon(parent: HTMLElement, iconId: string): void {
   parent.dataset.icon = iconId;
 }
 
+type DomElementInfo = {
+  cls?: string | string[];
+  attr?: Record<string, string | number | boolean | null>;
+  text?: string;
+  type?: string;
+  value?: string;
+};
+
+export function createEl<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  o?: DomElementInfo | string,
+): HTMLElementTagNameMap[K] {
+  const el = document.createElement(tag);
+  if (typeof o === "string") {
+    el.className = o;
+    return el;
+  }
+  if (o === undefined) {
+    return el;
+  }
+  if (o.cls !== undefined) {
+    el.className = Array.isArray(o.cls) ? o.cls.join(" ") : o.cls;
+  }
+  if (o.text !== undefined) {
+    el.textContent = o.text;
+  }
+  if (o.type !== undefined && "type" in el) {
+    (el as HTMLInputElement).type = o.type;
+  }
+  if (o.value !== undefined && "value" in el) {
+    (el as HTMLInputElement).value = String(o.value);
+  }
+  if (o.attr !== undefined) {
+    for (const [key, value] of Object.entries(o.attr)) {
+      if (value !== null) {
+        el.setAttribute(key, String(value));
+      }
+    }
+  }
+  return el;
+}
+
+(globalThis as unknown as { createEl: typeof createEl }).createEl = createEl;
+
+
 export class MenuItem {
   title = "";
   icon = "";

@@ -1,9 +1,9 @@
 {
   "id": "nest-note",
   "name": "NestNote",
-  "version": "1.0.0",
-  "minAppVersion": "1.5.0",
-  "description": "Treat folders as nested documents in Obsidian.",
+  "version": "1.0.1",
+  "minAppVersion": "1.7.2",
+  "description": "Treat folders as nested documents.",
   "author": "LiShaocheng",
   "authorUrl": "https://shaocheng.li",
   "isDesktopOnly": false

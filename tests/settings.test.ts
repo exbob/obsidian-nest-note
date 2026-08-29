@@ -66,8 +66,8 @@ class FakeSettingsPlugin extends Plugin implements NestNoteSettingsHost {
     super({} as App, {
       id: "nest-note",
       name: "NestNote",
-      version: "1.0.0",
-      minAppVersion: "1.5.0",
+      version: "1.0.1",
+      minAppVersion: "1.7.2",
       description: "",
       author: "",
     });

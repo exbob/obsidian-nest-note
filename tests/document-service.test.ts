@@ -804,22 +804,6 @@ describe("reserved attachments path", () => {
 });
 
 describe("NestNoteDocumentService compatibility", () => {
-  it("falls back to vault.trash(folder, false) when fileManager.trashFile is missing", async () => {
-    const vault = new FakeVault();
-    seedDocument(vault, "Work", workIndex());
-    const workspace = new FakeWorkspace();
-    const service = new NestNoteDocumentService(
-      { vault, workspace },
-      { createdAt: created },
-    );
-
-    await service.trash("Work");
-
-    expect(vault.trashLocalCalls).toEqual([{ path: "Work", system: false }]);
-    expect(vault.trashCalls).toEqual([]);
-    expect(vault.getFolderByPath("Work")).toBeNull();
-  });
-
   it("scans with getAllLoadedFiles when getAllFolders is unavailable", async () => {
     const { app, service } = createHarness();
     (app.vault as { getAllFolders?: unknown }).getAllFolders = undefined;

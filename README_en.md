@@ -6,7 +6,7 @@ NestNote is an [Obsidian](https://obsidian.md/) plugin that treats **folders as 
 
 - **Display name:** NestNote
 - **Plugin ID:** `nest-note`
-- **Minimum Obsidian version:** 1.5.0
+- **Minimum Obsidian version:** 1.7.2
 - **UI language:** Follows the Obsidian app language. Simplified Chinese and Traditional Chinese show Simplified Chinese; all other languages show English.
 
 ## Install
@@ -35,7 +35,7 @@ In Obsidian, open **Settings → Community plugins** and enable **NestNote**.
 ## Submit to Obsidian Community Plugins
 
 1. Make sure the GitHub repository is public and includes `README.md`, `LICENSE`, and `manifest.json` at the repo root.
-2. Run `bash build.sh`, then create a GitHub Release from `main.js`, `manifest.json`, and `styles.css` in `nest-note/`. The release tag must match `manifest.json` `version` exactly (for example `1.0.0`, with no `v` prefix).
+2. Run `bash build.sh`, then create a GitHub Release from `main.js`, `manifest.json`, and `styles.css` in `nest-note/`. The release tag must match `manifest.json` `version` exactly (for example `1.0.1`, with no `v` prefix).
 3. Sign in to [Obsidian Community](https://community.obsidian.md/), link your GitHub account, and submit the repository `exbob/obsidian-nest-note` for automated review.
 
 Later versions only need a `manifest.json` version bump, a code push, and a GitHub Release with the same tag. You do not need to resubmit to the community directory. See the [Obsidian plugin publishing docs](https://docs.obsidian.md/plugins/releasing/submit-plugin).
@@ -189,7 +189,7 @@ Configure these under Obsidian **Settings → NestNote**:
 
 - **Every delete shows a confirmation** (whether or not the document has children)
 - After confirm, the **entire document directory** (`index.md`, attachments, and all child documents) is moved to the Obsidian trash
-- Prefer `fileManager.trashFile`; older Obsidian versions fall back to `vault.trash(folder, false)` (local trash)
+- Delete uses `fileManager.trashFile`, following the user's file deletion preference (system trash or `.trash/`)
 - After restoring a directory from trash, the plugin fully rescans and re-identifies it when vault events fire
 - On delete failure, sidebar state is kept and an error Notice is shown
 
@@ -264,7 +264,7 @@ The following items **were not run in this development environment** and must no
   - Sidebar row **New child document** uses that row as parent
   - Command `nestnote:new-child-document` requires the parent’s `index.md` to be open and uses the active file’s document, not sidebar selection
 - Auto-archive runs only when the file can be safely tied to the active `index.md`. Allowed sources are a direct child of the current document directory, the vault root, or the resolved `attachmentFolderPath` (including `./` relative paths). `getNewFileParent(sourcePath)` is not used as the attachment folder. Other complete document directories / `attachments/` and unattributable paths are never moved; vault create events keep them silently
-- Delete prefers `fileManager.trashFile`; older Obsidian versions fall back to `vault.trash(..., false)` (local trash)
+- Delete uses `fileManager.trashFile`, following the user's file deletion preference
 - **Child depth:** complete document directories beyond “Max child document depth” remain on disk but are omitted from the scan and cannot be created as deeper children through the plugin
 
 ## Project layout
