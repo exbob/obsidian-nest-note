@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { t } from "../src/i18n";
 import { NestNoteAttachmentService } from "../src/services/attachment-service";
 import type { AttachmentServiceApp } from "../src/services/attachment-service";
 
@@ -330,9 +331,9 @@ describe("NestNoteAttachmentService.handleCreatedFile", () => {
 
     expect(app.vault.files.has("Inbox/paste.jpg")).toBe(true);
     expect(app.vault.renameCalls).toEqual([]);
-    expect(notices.some((message) => message.includes("Inbox/paste.jpg"))).toBe(
-      true,
-    );
+    expect(notices).toEqual([
+      t("notice.attachmentKept", { path: "Inbox/paste.jpg" }),
+    ]);
   });
 
   it("archives a vault-root attachment when the active index.md is known", async () => {

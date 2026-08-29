@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 export interface AttachmentFileRef {
   path: string;
   name: string;
@@ -89,7 +91,7 @@ export class NestNoteAttachmentService implements AttachmentService {
     if (documentPath === null) {
       this.maybeNotify(
         options,
-        `无法判断附件归属，已保留原位置：${sourcePath}`,
+        t("notice.attachmentKept", { path: sourcePath }),
       );
       return;
     }
@@ -111,7 +113,7 @@ export class NestNoteAttachmentService implements AttachmentService {
     if (!this.isAllowedSource(sourcePath, documentPath)) {
       this.maybeNotify(
         options,
-        `无法判断附件归属，已保留原位置：${sourcePath}`,
+        t("notice.attachmentKept", { path: sourcePath }),
       );
       return;
     }

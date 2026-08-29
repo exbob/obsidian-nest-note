@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { t } from "../src/i18n";
 import {
   DocumentServiceError,
   NestNoteDocumentService,
@@ -368,7 +369,7 @@ created: 2026-08-28T19:00:00+08:00
     });
 
     await expect(service.create(null, "")).rejects.toThrow(DocumentServiceError);
-    await expect(service.create(null, "")).rejects.toThrow(/空|无效|名称/);
+    await expect(service.create(null, "")).rejects.toThrow(t("error.nameEmpty"));
     await expect(service.create(null, ".")).rejects.toThrow(DocumentServiceError);
     await expect(service.create(null, "..")).rejects.toThrow(
       DocumentServiceError,
@@ -382,7 +383,9 @@ created: 2026-08-28T19:00:00+08:00
     await expect(service.create(null, "Work")).rejects.toThrow(
       DocumentServiceError,
     );
-    await expect(service.create(null, "Work")).rejects.toThrow(/已存在/);
+    await expect(service.create(null, "Work")).rejects.toThrow(
+      t("error.targetExists", { path: "Work" }),
+    );
     await expect(service.create(null, "a:b")).rejects.toThrow(DocumentServiceError);
     await expect(service.create(null, "a*b")).rejects.toThrow(DocumentServiceError);
     await expect(service.create(null, 'a?b')).rejects.toThrow(DocumentServiceError);
@@ -448,7 +451,7 @@ created: 2026-08-28T19:00:00+08:00
     });
 
     await expect(service.create("Level0/Level1/Level2/Level3/Level4/Level5", "TooDeep"))
-      .rejects.toThrow("层级");
+      .rejects.toThrow(t("error.maxDepthReached", { max: 5 }));
     expect(app.vault.folders.has("Level0/Level1/Level2/Level3/Level4/Level5/TooDeep"))
       .toBe(false);
     expect(app.vault.files.has("Level0/Level1/Level2/Level3/Level4/Level5/TooDeep/index.md"))
@@ -521,7 +524,9 @@ created: 2026-08-28T19:00:00+08:00
       getMaxChildDepth: () => 0,
     });
 
-    await expect(service.create("Work", "Child")).rejects.toThrow("层级");
+    await expect(service.create("Work", "Child")).rejects.toThrow(
+      t("error.maxDepthReached", { max: 0 }),
+    );
     expect(app.vault.folders.has("Work/Child")).toBe(false);
     expect(app.vault.files.has("Work/Child/index.md")).toBe(false);
     expect(app.vault.deleteCalls).toEqual([]);
@@ -563,7 +568,7 @@ created: 2020-01-01T00:00:00Z
     });
 
     await expect(service.create("Archive/Work/Child", "TooDeep")).rejects.toThrow(
-      "层级",
+      t("error.maxDepthReached", { max: 1 }),
     );
     expect(app.vault.folders.has("Archive/Work/Child/TooDeep")).toBe(false);
     expect(app.vault.files.has("Archive/Work/Child/TooDeep/index.md")).toBe(

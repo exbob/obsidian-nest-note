@@ -7,6 +7,7 @@ import {
   FrontmatterParseError,
   ensureDocumentFrontmatter,
 } from "../domain/frontmatter";
+import { t } from "../i18n";
 import { DEFAULT_NESTNOTE_SETTINGS } from "../settings";
 import type { DocumentNode, DocumentService, VaultEntry } from "../types";
 
@@ -93,7 +94,7 @@ export class NestNoteDocumentService implements DocumentService {
       parent === null ? documentName : `${parent}/${documentName}`;
 
     if (this.app.vault.getAbstractFileByPath(path) !== null) {
-      throw new DocumentServiceError(`目标已存在：${path}`);
+      throw new DocumentServiceError(t("error.targetExists", { path }));
     }
 
     const maxChildDepth =
@@ -102,7 +103,7 @@ export class NestNoteDocumentService implements DocumentService {
     const childDepth = parent === null ? 0 : this.documentDepth(parent) + 1;
     if (parent !== null && childDepth > maxChildDepth) {
       throw new DocumentServiceError(
-        `已达到最大子文档层级（${maxChildDepth}）`,
+        t("error.maxDepthReached", { max: maxChildDepth }),
       );
     }
 
@@ -156,12 +157,12 @@ export class NestNoteDocumentService implements DocumentService {
     const to = parent === null ? documentName : `${parent}/${documentName}`;
 
     if (to !== from && this.app.vault.getAbstractFileByPath(to) !== null) {
-      throw new DocumentServiceError(`目标已存在：${to}`);
+      throw new DocumentServiceError(t("error.targetExists", { path: to }));
     }
 
     const folder = this.app.vault.getFolderByPath(from);
     if (folder === null) {
-      throw new DocumentServiceError(`找不到文档：${from}`);
+      throw new DocumentServiceError(t("error.documentNotFound", { path: from }));
     }
 
     const indexFile = this.requireIndex(from);
@@ -216,7 +217,7 @@ export class NestNoteDocumentService implements DocumentService {
     const path = this.requireDocument(documentPath);
     const folder = this.app.vault.getFolderByPath(path);
     if (folder === null) {
-      throw new DocumentServiceError(`找不到文档：${path}`);
+      throw new DocumentServiceError(t("error.documentNotFound", { path }));
     }
 
     const parent = getParentPath(path);
@@ -243,7 +244,7 @@ export class NestNoteDocumentService implements DocumentService {
   private validateName(name: string): string {
     const trimmed = name.trim();
     if (trimmed === "") {
-      throw new DocumentServiceError("文档名称不能为空");
+      throw new DocumentServiceError(t("error.nameEmpty"));
     }
     if (
       trimmed === "." ||
@@ -254,7 +255,7 @@ export class NestNoteDocumentService implements DocumentService {
       trimmed.endsWith(".") ||
       name.trimStart() !== trimmed
     ) {
-      throw new DocumentServiceError(`文档名称无效：${name}`);
+      throw new DocumentServiceError(t("error.nameInvalid", { name }));
     }
     return trimmed;
   }
@@ -265,7 +266,9 @@ export class NestNoteDocumentService implements DocumentService {
     }
     const parent = normalizePath(parentPath);
     if (!this.isCompleteDocument(parent)) {
-      throw new DocumentServiceError(`父文档不存在或不完整：${parentPath}`);
+      throw new DocumentServiceError(
+        t("error.parentMissing", { path: parentPath }),
+      );
     }
     return parent;
   }
@@ -273,7 +276,9 @@ export class NestNoteDocumentService implements DocumentService {
   private requireDocument(documentPath: string): string {
     const path = normalizePath(documentPath);
     if (!this.isCompleteDocument(path)) {
-      throw new DocumentServiceError(`不是完整的 NestNote 文档：${documentPath}`);
+      throw new DocumentServiceError(
+        t("error.notCompleteDocument", { path: documentPath }),
+      );
     }
     return path;
   }
@@ -308,7 +313,9 @@ export class NestNoteDocumentService implements DocumentService {
   private requireIndex(documentPath: string): DocumentFileRef {
     const indexFile = this.app.vault.getFileByPath(`${documentPath}/index.md`);
     if (indexFile === null) {
-      throw new DocumentServiceError(`找不到文档：${documentPath}`);
+      throw new DocumentServiceError(
+        t("error.documentNotFound", { path: documentPath }),
+      );
     }
     return indexFile;
   }
@@ -347,7 +354,9 @@ export class NestNoteDocumentService implements DocumentService {
     for (const write of writes) {
       const file = this.app.vault.getFileByPath(write.path);
       if (file === null) {
-        throw new DocumentServiceError(`找不到文档：${write.path}`);
+        throw new DocumentServiceError(
+          t("error.documentNotFound", { path: write.path }),
+        );
       }
       await this.app.vault.modify(file, write.content);
     }
@@ -378,7 +387,7 @@ export class NestNoteDocumentService implements DocumentService {
   private requireScannedNode(path: string): DocumentNode {
     const node = findNode(this.scan(), path);
     if (node === null) {
-      throw new DocumentServiceError(`找不到文档：${path}`);
+      throw new DocumentServiceError(t("error.documentNotFound", { path }));
     }
     return node;
   }
@@ -410,7 +419,7 @@ export class NestNoteDocumentService implements DocumentService {
       return fn();
     } catch (error) {
       const message = isMetadataError(error)
-        ? `文档元数据异常，未写入任何更改：${errorMessage(error)}`
+        ? t("notice.metadataUnchanged", { detail: errorMessage(error) })
         : errorMessage(error);
       this.failWithNotice(message, error);
     }
