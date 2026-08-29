@@ -412,7 +412,7 @@ function seedDocument(
 const manifest: PluginManifest = {
   id: "nest-note",
   name: "NestNote",
-  "version": "0.2.0",
+  "version": "1.0.0",
   minAppVersion: "1.5.0",
   description: "Treat folders as nested documents in Obsidian.",
   author: "LiShaocheng",

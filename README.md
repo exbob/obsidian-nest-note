@@ -35,7 +35,7 @@ npm install
 ## 提交到 Obsidian 社区插件
 
 1. 确保 GitHub 仓库为公开仓库，并包含根目录下的 `README.md`、`LICENSE` 和 `manifest.json`。
-2. 运行 `bash build.sh`，使用 `nest-note/` 中的 `main.js`、`manifest.json` 和 `styles.css` 创建 GitHub Release。Release 标签必须与 `manifest.json` 的 `version` 完全一致（例如 `0.2.0`，不要加 `v`）。
+2. 运行 `bash build.sh`，使用 `nest-note/` 中的 `main.js`、`manifest.json` 和 `styles.css` 创建 GitHub Release。Release 标签必须与 `manifest.json` 的 `version` 完全一致（例如 `1.0.0`，不要加 `v`）。
 3. 登录 [Obsidian Community](https://community.obsidian.md/)，关联 GitHub 账号，提交仓库 `exbob/obsidian-nest-note` 进行自动审核。
 
 后续版本只需更新 `manifest.json` 的版本号、推送代码，并创建相同标签的新 GitHub Release；不需要重复提交社区目录。详见 [Obsidian 插件发布文档](https://docs.obsidian.md/plugins/releasing/submit-plugin)。

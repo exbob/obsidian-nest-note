@@ -35,7 +35,7 @@ In Obsidian, open **Settings → Community plugins** and enable **NestNote**.
 ## Submit to Obsidian Community Plugins
 
 1. Make sure the GitHub repository is public and includes `README.md`, `LICENSE`, and `manifest.json` at the repo root.
-2. Run `bash build.sh`, then create a GitHub Release from `main.js`, `manifest.json`, and `styles.css` in `nest-note/`. The release tag must match `manifest.json` `version` exactly (for example `0.2.0`, with no `v` prefix).
+2. Run `bash build.sh`, then create a GitHub Release from `main.js`, `manifest.json`, and `styles.css` in `nest-note/`. The release tag must match `manifest.json` `version` exactly (for example `1.0.0`, with no `v` prefix).
 3. Sign in to [Obsidian Community](https://community.obsidian.md/), link your GitHub account, and submit the repository `exbob/obsidian-nest-note` for automated review.
 
 Later versions only need a `manifest.json` version bump, a code push, and a GitHub Release with the same tag. You do not need to resubmit to the community directory. See the [Obsidian plugin publishing docs](https://docs.obsidian.md/plugins/releasing/submit-plugin).
