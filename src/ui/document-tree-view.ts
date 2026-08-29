@@ -381,7 +381,7 @@ function iconButton(
 ): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "nestnote-icon-button";
+  button.className = "clickable-icon nestnote-icon-button";
   button.setAttribute("aria-label", label);
   setIcon(button, icon);
   button.addEventListener("click", onClick);

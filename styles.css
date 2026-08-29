@@ -75,7 +75,8 @@
   opacity: 1;
 }
 
-.nestnote-icon-button {
+button.nestnote-icon-button {
+  appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -83,24 +84,36 @@
   height: 22px;
   padding: 0;
   border: none;
+  box-shadow: none;
   border-radius: var(--radius-s);
-  background: transparent;
+  background-color: transparent;
   color: var(--text-muted);
   cursor: pointer;
 }
 
-.nestnote-icon-button:hover,
-.nestnote-icon-button:focus-visible {
+.nestnote-view button.nestnote-icon-button {
+  color: inherit;
+}
+
+button.nestnote-icon-button:hover,
+button.nestnote-icon-button:focus-visible {
   background-color: var(--background-modifier-hover);
+  box-shadow: none;
+  border: none;
   color: var(--text-normal);
 }
 
-.nestnote-icon-button:disabled {
+.nestnote-view button.nestnote-icon-button:hover,
+.nestnote-view button.nestnote-icon-button:focus-visible {
+  color: inherit;
+}
+
+button.nestnote-icon-button:disabled {
   opacity: 0.35;
   cursor: default;
 }
 
-.nestnote-icon-button:disabled:hover {
+button.nestnote-icon-button:disabled:hover {
   background-color: transparent;
   color: var(--text-muted);
 }
