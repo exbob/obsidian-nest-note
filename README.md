@@ -11,8 +11,8 @@ NestNote 是一个 [Obsidian](https://obsidian.md/) 插件，将 **文件夹即�
 ### 从源码构建
 
 ```bash
-git clone <仓库地址>
-cd notebookinfolder
+git clone https://github.com/exbob/obsidian-nest-note.git
+cd obsidian-nest-note
 npm install
 ./build.sh
 ```
