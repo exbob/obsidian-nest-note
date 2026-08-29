@@ -415,7 +415,8 @@ const manifest: PluginManifest = {
   "version": "0.2.0",
   minAppVersion: "1.5.0",
   description: "Treat folders as nested documents in Obsidian.",
-  author: "NestNote contributors",
+  author: "LiShaocheng",
+  authorUrl: "https://shaocheng.li",
 };
 
 function createApp(seed?: (vault: FakeVault, workspace: FakeWorkspace) => void): FakeApp {
