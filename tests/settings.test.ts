@@ -6,6 +6,7 @@ import {
   normalizeNestNoteSettings,
   type NestNoteSettings,
 } from "../src/settings";
+import { t } from "../src/i18n";
 import {
   NestNoteSettingTab,
   type NestNoteSettingsHost,
@@ -112,10 +113,10 @@ describe("NestNoteSettingTab", () => {
   it("renders the depth and startup settings", () => {
     const { tab } = mountTab({ maxChildDepth: 3, openPanelOnStartup: false });
     const text = tab.containerEl.textContent ?? "";
-    expect(text).toContain("最大子文档层级");
-    expect(text).toContain("根文档为第 0 级，可设置 0～9");
-    expect(text).toContain("启动时打开 NestNote 面板");
-    expect(text).toContain("仅影响下次启动，不关闭当前面板");
+    expect(text).toContain(t("setting.maxChildDepthName"));
+    expect(text).toContain(t("setting.maxChildDepthDesc"));
+    expect(text).toContain(t("setting.openPanelOnStartupName"));
+    expect(text).toContain(t("setting.openPanelOnStartupDesc"));
 
     const input = depthInput(tab);
     expect(input.min).toBe("0");

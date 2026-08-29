@@ -1,5 +1,6 @@
 import { ItemView, Menu, Modal, setIcon } from "obsidian";
 import type { App, WorkspaceLeaf } from "obsidian";
+import { t } from "../i18n";
 import type { DocumentNode, DocumentService } from "../types";
 import { isAlreadyNoticed } from "../services/document-service";
 
@@ -44,17 +45,17 @@ export class DocumentTreeView extends ItemView {
 
     const toolbar = document.createElement("div");
     toolbar.className = "nestnote-toolbar";
-    this.allToggleButton = iconButton("chevrons-down", "全部展开", () => {
+    this.allToggleButton = iconButton("chevrons-down", t("ui.expandAll"), () => {
       this.toggleAllExpanded();
     });
     toolbar.append(
-      iconButton("plus", "新建文档", () => {
-        this.openNameModal("新建文档", "", (name) =>
+      iconButton("plus", t("command.newDocument"), () => {
+        this.openNameModal(t("command.newDocument"), "", (name) =>
           this.options.documents.create(null, name),
         );
       }),
       this.allToggleButton,
-      iconButton("refresh-cw", "刷新", () => {
+      iconButton("refresh-cw", t("command.refresh"), () => {
         this.options.requestRefresh();
       }),
     );
@@ -115,7 +116,7 @@ export class DocumentTreeView extends ItemView {
       row.append(
         iconButton(
           expanded ? "chevron-down" : "chevron-right",
-          expanded ? "折叠" : "展开",
+          expanded ? t("ui.collapse") : t("ui.expand"),
           (event) => {
             event.stopPropagation();
             this.toggleExpanded(node.path);
@@ -139,26 +140,26 @@ export class DocumentTreeView extends ItemView {
     const actions = document.createElement("div");
     actions.className = "nestnote-actions";
     actions.append(
-      iconButton("plus-circle", "新建子文档", (event) => {
+      iconButton("plus-circle", t("command.newChildDocument"), (event) => {
         event.stopPropagation();
-        this.openNameModal("新建子文档", "", (name) =>
+        this.openNameModal(t("command.newChildDocument"), "", (name) =>
           this.options.documents.create(node.path, name),
         );
       }),
-      iconButton("ellipsis-vertical", "更多", (event) => {
+      iconButton("ellipsis-vertical", t("ui.more"), (event) => {
         event.stopPropagation();
         const menu = new Menu();
         menu.addItem((item) => {
-          item.setTitle("重命名");
+          item.setTitle(t("ui.rename"));
           item.setIcon("pencil");
           item.onClick(() => {
-            this.openNameModal("重命名", node.name, (name) =>
+            this.openNameModal(t("ui.rename"), node.name, (name) =>
               this.options.documents.rename(node.path, name),
             );
           });
         });
         menu.addItem((item) => {
-          item.setTitle("删除");
+          item.setTitle(t("ui.delete"));
           item.setIcon("trash-2");
           item.onClick(() => {
             this.openTrashModal(node);
@@ -223,7 +224,7 @@ export class DocumentTreeView extends ItemView {
     const allExpanded =
       paths.length > 0 && paths.every((path) => this.expanded.has(path));
     button.disabled = paths.length === 0;
-    const label = allExpanded ? "全部折叠" : "全部展开";
+    const label = allExpanded ? t("ui.collapseAll") : t("ui.expandAll");
     button.setAttribute("aria-label", label);
     setIcon(button, allExpanded ? "chevrons-up" : "chevrons-down");
   }
@@ -249,8 +250,8 @@ export class DocumentTreeView extends ItemView {
   }
 
   private openTrashModal(node: DocumentNode): void {
-    const message = `删除「${node.name}」会将整个子树移入回收站。`;
-    new NestNoteConfirmModal(this.app, "删除文档", message, () => {
+    const message = t("ui.deleteConfirm", { name: node.name });
+    new NestNoteConfirmModal(this.app, t("ui.deleteDocument"), message, () => {
       void this.run(async () => this.options.documents.trash(node.path));
     }).open();
   }
@@ -290,7 +291,7 @@ class NestNoteNameModal extends Modal {
     const input = document.createElement("input");
     input.type = "text";
     input.value = this.initial;
-    input.setAttribute("aria-label", "文档名称");
+    input.setAttribute("aria-label", t("ui.documentName"));
 
     let submitted = false;
     const submit = (): void => {
@@ -316,11 +317,11 @@ class NestNoteNameModal extends Modal {
     const actions = document.createElement("div");
     actions.className = "nestnote-modal-actions";
     actions.append(
-      iconButton("check", "确认", (event) => {
+      iconButton("check", t("ui.confirm"), (event) => {
         event.preventDefault();
         submit();
       }),
-      iconButton("x", "取消", () => {
+      iconButton("x", t("ui.cancel"), () => {
         this.close();
       }),
     );
@@ -356,12 +357,12 @@ class NestNoteConfirmModal extends Modal {
     const actions = document.createElement("div");
     actions.className = "nestnote-modal-actions";
     actions.append(
-      iconButton("check", "确认", (event) => {
+      iconButton("check", t("ui.confirm"), (event) => {
         event.preventDefault();
         this.onConfirm();
         this.close();
       }),
-      iconButton("x", "取消", () => {
+      iconButton("x", t("ui.cancel"), () => {
         this.close();
       }),
     );

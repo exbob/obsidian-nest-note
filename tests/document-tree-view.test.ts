@@ -5,6 +5,7 @@ import {
   VIEW_TYPE_NESTNOTE,
 } from "../src/ui/document-tree-view";
 import type { DocumentNode, DocumentService } from "../src/types";
+import { t } from "../src/i18n";
 import { DocumentServiceError } from "../src/services/document-service";
 
 function node(
@@ -70,7 +71,7 @@ function action(path: string, label: string): HTMLElement {
 }
 
 function menuItem(path: string, label: string): HTMLElement {
-  action(path, "更多").click();
+  action(path, t("ui.more")).click();
   const item = document.querySelector(`.menu [aria-label="${label}"]`);
   if (!(item instanceof HTMLElement)) {
     throw new Error(`missing menu item ${label} for ${path}`);
@@ -101,7 +102,7 @@ async function confirmModal(name?: string): Promise<void> {
     input.value = name;
     input.dispatchEvent(new Event("input", { bubbles: true }));
   }
-  const confirm = modal.querySelector('[aria-label="确认"]');
+  const confirm = modal.querySelector(`[aria-label="${t("ui.confirm")}"]`);
   if (!(confirm instanceof HTMLElement)) {
     throw new Error("confirm button missing");
   }
@@ -153,7 +154,7 @@ describe("DocumentTreeView", () => {
 
   it("creates a root document with a null parent path", async () => {
     const { documents, requestRefresh } = await mount();
-    toolbar("新建文档").click();
+    toolbar(t("command.newDocument")).click();
     await confirmModal("Journal");
     expect(documents.create).toHaveBeenCalledWith(null, "Journal");
     expect(requestRefresh).toHaveBeenCalled();
@@ -161,7 +162,7 @@ describe("DocumentTreeView", () => {
 
   it("creates a child document from a node action", async () => {
     const { documents } = await mount();
-    action("Work", "新建子文档").click();
+    action("Work", t("command.newChildDocument")).click();
     await confirmModal("Drafts");
     expect(documents.create).toHaveBeenCalledWith("Work", "Drafts");
     expect(documents.open).not.toHaveBeenCalled();
@@ -169,24 +170,23 @@ describe("DocumentTreeView", () => {
 
   it("renames a document from the more menu", async () => {
     const { documents } = await mount();
-    menuItem("Inbox", "重命名").click();
+    menuItem("Inbox", t("ui.rename")).click();
     await confirmModal("Archive");
     expect(documents.rename).toHaveBeenCalledWith("Inbox", "Archive");
   });
 
   it("trashes a document after modal confirmation about the subtree", async () => {
     const { documents } = await mount();
-    menuItem("Work", "删除").click();
+    menuItem("Work", t("ui.delete")).click();
     const modal = document.querySelector(".nestnote-modal");
-    expect(modal?.textContent).toMatch(/整个子树/);
-    expect(modal?.textContent).toMatch(/回收站/);
+    expect(modal?.textContent).toContain(t("ui.deleteConfirm", { name: "Work" }));
     await confirmModal();
     expect(documents.trash).toHaveBeenCalledWith("Work");
   });
 
   it("keeps expand and selection after a refresh when nodes still exist", async () => {
     const { view } = await mount();
-    action("Work", "展开").click();
+    action("Work", t("ui.expand")).click();
     const name = row("Work/Notes").querySelector(".nestnote-name");
     if (!(name instanceof HTMLElement)) {
       throw new Error("name missing");
@@ -202,7 +202,7 @@ describe("DocumentTreeView", () => {
 
   it("does not restore expand or selection for nodes that disappeared", async () => {
     const { view } = await mount();
-    action("Work", "展开").click();
+    action("Work", t("ui.expand")).click();
     const name = row("Work/Notes").querySelector(".nestnote-name");
     if (!(name instanceof HTMLElement)) {
       throw new Error("name missing");
@@ -218,20 +218,20 @@ describe("DocumentTreeView", () => {
 
   it("labels toolbar and node actions for accessibility and icons", async () => {
     await mount();
-    for (const label of ["新建文档", "全部展开", "刷新"]) {
+    for (const label of [t("command.newDocument"), t("ui.expandAll"), t("command.refresh")]) {
       const button = toolbar(label);
       expect(button.tagName).toBe("BUTTON");
       expect(button.dataset.icon).toBeTruthy();
     }
-    for (const label of ["新建子文档", "更多"]) {
+    for (const label of [t("command.newChildDocument"), t("ui.more")]) {
       const button = action("Work", label);
       expect(button.tagName).toBe("BUTTON");
       expect(button.dataset.icon).toBeTruthy();
     }
-    expect(action("Work", "更多").dataset.icon).toBe("ellipsis-vertical");
-    expect(action("Work", "展开").dataset.icon).toBeTruthy();
-    action("Work", "更多").click();
-    for (const label of ["重命名", "删除"]) {
+    expect(action("Work", t("ui.more")).dataset.icon).toBe("ellipsis-vertical");
+    expect(action("Work", t("ui.expand")).dataset.icon).toBeTruthy();
+    action("Work", t("ui.more")).click();
+    for (const label of [t("ui.rename"), t("ui.delete")]) {
       const item = document.querySelector(`.menu [aria-label="${label}"]`);
       expect(item).toBeInstanceOf(HTMLButtonElement);
       expect((item as HTMLElement).dataset.icon).toBeTruthy();
@@ -240,8 +240,8 @@ describe("DocumentTreeView", () => {
 
   it("requests a refresh from the toolbar without changing local tree state", async () => {
     const { requestRefresh } = await mount();
-    action("Work", "展开").click();
-    toolbar("刷新").click();
+    action("Work", t("ui.expand")).click();
+    toolbar(t("command.refresh")).click();
     expect(requestRefresh).toHaveBeenCalled();
     expect(row("Work").classList.contains("is-expanded")).toBe(true);
   });
@@ -252,8 +252,8 @@ describe("DocumentTreeView", () => {
         trash: vi.fn().mockRejectedValue(new Error("trash failed")),
       },
     });
-    action("Work", "展开").click();
-    menuItem("Work", "删除").click();
+    action("Work", t("ui.expand")).click();
+    menuItem("Work", t("ui.delete")).click();
     await confirmModal();
     expect(documents.trash).toHaveBeenCalledWith("Work");
     expect(requestRefresh).not.toHaveBeenCalled();
@@ -271,7 +271,7 @@ describe("DocumentTreeView", () => {
         trash: vi.fn().mockRejectedValue(alreadyNoticed),
       },
     });
-    menuItem("Work", "删除").click();
+    menuItem("Work", t("ui.delete")).click();
     await confirmModal();
     expect(documents.trash).toHaveBeenCalledWith("Work");
     expect(notice).not.toHaveBeenCalled();
@@ -279,11 +279,11 @@ describe("DocumentTreeView", () => {
 
   it("submits and closes the name modal on Enter", async () => {
     const { documents } = await mount();
-    action("Work", "新建子文档").click();
+    action("Work", t("command.newChildDocument")).click();
     const modal = document.querySelector(".nestnote-modal");
     const input = modal?.querySelector("input");
     if (!(input instanceof HTMLInputElement)) throw new Error("input missing");
-    const confirm = modal?.querySelector('[aria-label="确认"]');
+    const confirm = modal?.querySelector(`[aria-label="${t("ui.confirm")}"]`);
     if (!(confirm instanceof HTMLElement)) throw new Error("confirm missing");
     input.value = "From Enter";
     const event = new KeyboardEvent("keydown", {
@@ -308,38 +308,38 @@ describe("DocumentTreeView", () => {
       node("Inbox", "Inbox"),
     ];
     const { requestRefresh } = await mount({ nodes: nestedTree });
-    const expandAll = toolbar("全部展开");
+    const expandAll = toolbar(t("ui.expandAll"));
     expect(expandAll).toBeInstanceOf(HTMLButtonElement);
     expect((expandAll as HTMLButtonElement).disabled).toBe(false);
     expect((expandAll as HTMLButtonElement).dataset.icon).toBe("chevrons-down");
     expandAll.click();
     expect(row("Work").classList.contains("is-expanded")).toBe(true);
     expect(row("Work/Notes").classList.contains("is-expanded")).toBe(true);
-    expect(toolbar("全部折叠")).toBeTruthy();
-    expect((toolbar("全部折叠") as HTMLButtonElement).dataset.icon).toBe(
+    expect(toolbar(t("ui.collapseAll"))).toBeTruthy();
+    expect((toolbar(t("ui.collapseAll")) as HTMLButtonElement).dataset.icon).toBe(
       "chevrons-up",
     );
     expect(requestRefresh).not.toHaveBeenCalled();
-    toolbar("全部折叠").click();
+    toolbar(t("ui.collapseAll")).click();
     expect(row("Work").classList.contains("is-expanded")).toBe(false);
     expect(row("Work/Notes").classList.contains("is-expanded")).toBe(false);
-    expect(toolbar("全部展开")).toBeTruthy();
+    expect(toolbar(t("ui.expandAll"))).toBeTruthy();
     expect(requestRefresh).not.toHaveBeenCalled();
   });
 
   it("disables expand-all on an empty tree or a tree with no children", async () => {
     await mount({ nodes: [] });
-    expect((toolbar("全部展开") as HTMLButtonElement).disabled).toBe(true);
+    expect((toolbar(t("ui.expandAll")) as HTMLButtonElement).disabled).toBe(true);
 
     document.body.replaceChildren();
     await mount({ nodes: [node("Inbox", "Inbox")] });
-    expect((toolbar("全部展开") as HTMLButtonElement).disabled).toBe(true);
+    expect((toolbar(t("ui.expandAll")) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("switches the toolbar toggle after every expandable node is opened", async () => {
     await mount();
-    expect(toolbar("全部展开")).toBeTruthy();
-    action("Work", "展开").click();
-    expect(toolbar("全部折叠")).toBeTruthy();
+    expect(toolbar(t("ui.expandAll"))).toBeTruthy();
+    action("Work", t("ui.expand")).click();
+    expect(toolbar(t("ui.collapseAll"))).toBeTruthy();
   });
 });

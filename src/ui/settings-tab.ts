@@ -1,5 +1,6 @@
 import { Notice, PluginSettingTab, Setting } from "obsidian";
 import type { App, Plugin } from "obsidian";
+import { t } from "../i18n";
 import type { NestNoteSettings } from "../settings";
 
 export interface NestNoteSettingsHost {
@@ -23,8 +24,8 @@ export class NestNoteSettingTab extends PluginSettingTab {
     this.containerEl.replaceChildren();
 
     new Setting(this.containerEl)
-      .setName("最大子文档层级")
-      .setDesc("根文档为第 0 级，可设置 0～9")
+      .setName(t("setting.maxChildDepthName"))
+      .setDesc(t("setting.maxChildDepthDesc"))
       .addSlider((slider) => {
         slider.setLimits(0, 9, 1);
         slider.setValue(this.host.settings.maxChildDepth);
@@ -36,8 +37,8 @@ export class NestNoteSettingTab extends PluginSettingTab {
       });
 
     new Setting(this.containerEl)
-      .setName("启动时打开 NestNote 面板")
-      .setDesc("仅影响下次启动，不关闭当前面板")
+      .setName(t("setting.openPanelOnStartupName"))
+      .setDesc(t("setting.openPanelOnStartupDesc"))
       .addToggle((toggle) => {
         toggle.setValue(this.host.settings.openPanelOnStartup);
         toggle.onChange((value) => {
@@ -54,7 +55,7 @@ export class NestNoteSettingTab extends PluginSettingTab {
   ): Promise<void> {
     if (!Number.isInteger(value) || value < 0 || value > 9) {
       slider.setValue(this.host.settings.maxChildDepth);
-      new Notice("最大子文档层级必须是 0～9 的整数");
+      new Notice(t("setting.maxChildDepthInvalid"));
       return;
     }
     const previous = this.host.settings.maxChildDepth;
@@ -89,6 +90,6 @@ export class NestNoteSettingTab extends PluginSettingTab {
 
   private noticeSaveFailure(error: unknown): void {
     const detail = error instanceof Error ? error.message : String(error);
-    new Notice(`设置保存失败，已恢复为上次有效值：${detail}`);
+    new Notice(t("setting.saveFailed", { detail }));
   }
 }
