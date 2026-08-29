@@ -130,6 +130,57 @@ export function setIcon(parent: HTMLElement, iconId: string): void {
   parent.dataset.icon = iconId;
 }
 
+export class MenuItem {
+  title = "";
+  icon = "";
+  clickHandler: ((evt: MouseEvent) => unknown) | null = null;
+
+  setTitle(title: string): this {
+    this.title = title;
+    return this;
+  }
+
+  setIcon(icon: string): this {
+    this.icon = icon;
+    return this;
+  }
+
+  onClick(callback: (evt: MouseEvent) => unknown): this {
+    this.clickHandler = callback;
+    return this;
+  }
+}
+
+export class Menu {
+  private readonly items: MenuItem[] = [];
+
+  addItem(cb: (item: MenuItem) => unknown): this {
+    const item = new MenuItem();
+    cb(item);
+    this.items.push(item);
+    return this;
+  }
+
+  showAtMouseEvent(_event: MouseEvent): void {
+    document.querySelector(".menu")?.remove();
+    const menu = document.createElement("div");
+    menu.className = "menu";
+    for (const item of this.items) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute("aria-label", item.title);
+      if (item.icon !== "") {
+        button.dataset.icon = item.icon;
+      }
+      button.addEventListener("click", (event) => {
+        item.clickHandler?.(event);
+      });
+      menu.append(button);
+    }
+    document.body.append(menu);
+  }
+}
+
 export class SettingTab {
   app: unknown;
   containerEl: HTMLElement;

@@ -478,6 +478,21 @@ async function confirmNameModal(name: string): Promise<void> {
   await Promise.resolve();
 }
 
+function clickTrashFromMore(path: string): void {
+  const more = document.querySelector(
+    `[data-path="${path}"] [aria-label="更多"]`,
+  );
+  if (!(more instanceof HTMLElement)) {
+    throw new Error("more action missing");
+  }
+  more.click();
+  const trash = document.querySelector('.menu [aria-label="删除"]');
+  if (!(trash instanceof HTMLElement)) {
+    throw new Error("trash action missing");
+  }
+  trash.click();
+}
+
 async function settle(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
@@ -960,13 +975,7 @@ created: 2020-01-01T00:00:00Z
     await settle();
 
     await plugin.activateView();
-    const trash = document.querySelector(
-      '[data-path="Work"] [aria-label="删除"]',
-    );
-    if (!(trash instanceof HTMLElement)) {
-      throw new Error("trash action missing");
-    }
-    trash.click();
+    clickTrashFromMore("Work");
     const confirm = document.querySelector('.nestnote-modal [aria-label="确认"]');
     if (!(confirm instanceof HTMLElement)) {
       throw new Error("confirm missing");
@@ -994,13 +1003,7 @@ created: 2020-01-01T00:00:00Z
     await settle();
 
     await plugin.activateView();
-    const trash = document.querySelector(
-      '[data-path="Work"] [aria-label="删除"]',
-    );
-    if (!(trash instanceof HTMLElement)) {
-      throw new Error("trash action missing");
-    }
-    trash.click();
+    clickTrashFromMore("Work");
     const confirm = document.querySelector('.nestnote-modal [aria-label="确认"]');
     if (!(confirm instanceof HTMLElement)) {
       throw new Error("confirm missing");

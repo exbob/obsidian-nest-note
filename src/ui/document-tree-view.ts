@@ -1,4 +1,4 @@
-import { ItemView, Modal, setIcon } from "obsidian";
+import { ItemView, Menu, Modal, setIcon } from "obsidian";
 import type { App, WorkspaceLeaf } from "obsidian";
 import type { DocumentNode, DocumentService } from "../types";
 import { isAlreadyNoticed } from "../services/document-service";
@@ -139,25 +139,32 @@ export class DocumentTreeView extends ItemView {
     const actions = document.createElement("div");
     actions.className = "nestnote-actions";
     actions.append(
-      iconButton("file-text", "打开", (event) => {
-        event.stopPropagation();
-        void this.openDocument(node.path);
-      }),
       iconButton("plus-circle", "新建子文档", (event) => {
         event.stopPropagation();
         this.openNameModal("新建子文档", "", (name) =>
           this.options.documents.create(node.path, name),
         );
       }),
-      iconButton("pencil", "重命名", (event) => {
+      iconButton("ellipsis-vertical", "更多", (event) => {
         event.stopPropagation();
-        this.openNameModal("重命名", node.name, (name) =>
-          this.options.documents.rename(node.path, name),
-        );
-      }),
-      iconButton("trash-2", "删除", (event) => {
-        event.stopPropagation();
-        this.openTrashModal(node);
+        const menu = new Menu();
+        menu.addItem((item) => {
+          item.setTitle("重命名");
+          item.setIcon("pencil");
+          item.onClick(() => {
+            this.openNameModal("重命名", node.name, (name) =>
+              this.options.documents.rename(node.path, name),
+            );
+          });
+        });
+        menu.addItem((item) => {
+          item.setTitle("删除");
+          item.setIcon("trash-2");
+          item.onClick(() => {
+            this.openTrashModal(node);
+          });
+        });
+        menu.showAtMouseEvent(event);
       }),
     );
 

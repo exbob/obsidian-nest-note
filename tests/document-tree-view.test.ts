@@ -69,6 +69,15 @@ function action(path: string, label: string): HTMLElement {
   return button;
 }
 
+function menuItem(path: string, label: string): HTMLElement {
+  action(path, "更多").click();
+  const item = document.querySelector(`.menu [aria-label="${label}"]`);
+  if (!(item instanceof HTMLElement)) {
+    throw new Error(`missing menu item ${label} for ${path}`);
+  }
+  return item;
+}
+
 function toolbar(label: string): HTMLElement {
   const button = document.querySelector(
     `.nestnote-toolbar [aria-label="${label}"]`,
@@ -137,11 +146,9 @@ describe("DocumentTreeView", () => {
     expect(documents.open).toHaveBeenCalledWith("Work/Notes");
   });
 
-  it("opens a document from the node open action", async () => {
-    const { documents } = await mount();
-    action("Inbox", "打开").click();
-    await Promise.resolve();
-    expect(documents.open).toHaveBeenCalledWith("Inbox");
+  it("does not render an open button on each document row", async () => {
+    await mount();
+    expect(row("Inbox").querySelector('[aria-label="打开"]')).toBeNull();
   });
 
   it("creates a root document with a null parent path", async () => {
@@ -160,16 +167,16 @@ describe("DocumentTreeView", () => {
     expect(documents.open).not.toHaveBeenCalled();
   });
 
-  it("renames a document from a node action", async () => {
+  it("renames a document from the more menu", async () => {
     const { documents } = await mount();
-    action("Inbox", "重命名").click();
+    menuItem("Inbox", "重命名").click();
     await confirmModal("Archive");
     expect(documents.rename).toHaveBeenCalledWith("Inbox", "Archive");
   });
 
   it("trashes a document after modal confirmation about the subtree", async () => {
     const { documents } = await mount();
-    action("Work", "删除").click();
+    menuItem("Work", "删除").click();
     const modal = document.querySelector(".nestnote-modal");
     expect(modal?.textContent).toMatch(/整个子树/);
     expect(modal?.textContent).toMatch(/回收站/);
@@ -216,12 +223,19 @@ describe("DocumentTreeView", () => {
       expect(button.tagName).toBe("BUTTON");
       expect(button.dataset.icon).toBeTruthy();
     }
-    for (const label of ["打开", "新建子文档", "重命名", "删除"]) {
+    for (const label of ["新建子文档", "更多"]) {
       const button = action("Work", label);
       expect(button.tagName).toBe("BUTTON");
       expect(button.dataset.icon).toBeTruthy();
     }
+    expect(action("Work", "更多").dataset.icon).toBe("ellipsis-vertical");
     expect(action("Work", "展开").dataset.icon).toBeTruthy();
+    action("Work", "更多").click();
+    for (const label of ["重命名", "删除"]) {
+      const item = document.querySelector(`.menu [aria-label="${label}"]`);
+      expect(item).toBeInstanceOf(HTMLButtonElement);
+      expect((item as HTMLElement).dataset.icon).toBeTruthy();
+    }
   });
 
   it("requests a refresh from the toolbar without changing local tree state", async () => {
@@ -239,7 +253,7 @@ describe("DocumentTreeView", () => {
       },
     });
     action("Work", "展开").click();
-    action("Work", "删除").click();
+    menuItem("Work", "删除").click();
     await confirmModal();
     expect(documents.trash).toHaveBeenCalledWith("Work");
     expect(requestRefresh).not.toHaveBeenCalled();
@@ -257,7 +271,7 @@ describe("DocumentTreeView", () => {
         trash: vi.fn().mockRejectedValue(alreadyNoticed),
       },
     });
-    action("Work", "删除").click();
+    menuItem("Work", "删除").click();
     await confirmModal();
     expect(documents.trash).toHaveBeenCalledWith("Work");
     expect(notice).not.toHaveBeenCalled();
