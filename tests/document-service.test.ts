@@ -250,27 +250,49 @@ created: 2020-01-01T00:00:00Z
 ${body}`;
 }
 
-function createHarness(seed?: (vault: FakeVault) => void): {
-  app: FakeApp;
-  notices: string[];
-  service: NestNoteDocumentService;
-} {
+function createApp(seed?: (vault: FakeVault) => void): FakeApp {
   const vault = new FakeVault();
   seed?.(vault);
   const workspace = new FakeWorkspace();
-  const notices: string[] = [];
-  const app: FakeApp = {
+  return {
     vault,
     fileManager: {
       trashFile: (file) => vault.trashFile(file),
     },
     workspace,
   };
+}
+
+function createHarness(seed?: (vault: FakeVault) => void): {
+  app: FakeApp;
+  notices: string[];
+  service: NestNoteDocumentService;
+} {
+  const app = createApp(seed);
+  const notices: string[] = [];
   const service = new NestNoteDocumentService(app, {
     createdAt: created,
     notice: (message: string) => notices.push(message),
   });
   return { app, notices, service };
+}
+
+function createSeededAppWithDocumentChain(depth: number): FakeApp {
+  return createApp((vault) => {
+    const segments: string[] = [];
+    for (let level = 0; level <= depth; level++) {
+      segments.push(`Level${level}`);
+      seedDocument(
+        vault,
+        segments.join("/"),
+        `---
+name: Level${level}
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+    }
+  });
 }
 
 describe("NestNoteDocumentService.create", () => {
@@ -417,6 +439,137 @@ created: 2026-08-28T19:00:00+08:00
     expect(app.vault.files.has("Work/index.md")).toBe(false);
     expect(notices.length).toBeGreaterThan(0);
     expect(notices[0]).toMatch(/create failed: Work\/index\.md/);
+  });
+
+  it("rejects a child whose depth exceeds the configured maximum", async () => {
+    const app = createSeededAppWithDocumentChain(5);
+    const service = new NestNoteDocumentService(app, {
+      getMaxChildDepth: () => 5,
+    });
+
+    await expect(service.create("Level0/Level1/Level2/Level3/Level4/Level5", "TooDeep"))
+      .rejects.toThrow("层级");
+    expect(app.vault.folders.has("Level0/Level1/Level2/Level3/Level4/Level5/TooDeep"))
+      .toBe(false);
+    expect(app.vault.files.has("Level0/Level1/Level2/Level3/Level4/Level5/TooDeep/index.md"))
+      .toBe(false);
+    expect(app.vault.deleteCalls).toEqual([]);
+  });
+
+  it("creates a child at the configured maximum depth", async () => {
+    const app = createSeededAppWithDocumentChain(4);
+    const service = new NestNoteDocumentService(app, {
+      createdAt: created,
+      getMaxChildDepth: () => 5,
+    });
+
+    const node = await service.create(
+      "Level0/Level1/Level2/Level3/Level4",
+      "Level5",
+    );
+
+    expect(node.path).toBe("Level0/Level1/Level2/Level3/Level4/Level5");
+    expect(app.vault.folders.has("Level0/Level1/Level2/Level3/Level4/Level5")).toBe(
+      true,
+    );
+    expect(
+      app.vault.files.has("Level0/Level1/Level2/Level3/Level4/Level5/index.md"),
+    ).toBe(true);
+  });
+
+  it("creates and returns a child at depth 9 when the maximum is 9", async () => {
+    const app = createSeededAppWithDocumentChain(8);
+    const service = new NestNoteDocumentService(app, {
+      createdAt: created,
+      getMaxChildDepth: () => 9,
+    });
+    const parent =
+      "Level0/Level1/Level2/Level3/Level4/Level5/Level6/Level7/Level8";
+
+    const node = await service.create(parent, "Level9");
+
+    expect(node).toEqual({
+      name: "Level9",
+      path: `${parent}/Level9`,
+      indexPath: `${parent}/Level9/index.md`,
+      attachmentsPath: `${parent}/Level9/attachments`,
+      children: [],
+    });
+    expect(app.vault.folders.has(`${parent}/Level9`)).toBe(true);
+    expect(app.vault.files.has(`${parent}/Level9/index.md`)).toBe(true);
+  });
+
+  it("allows a root document when the maximum child depth is zero", async () => {
+    const app = createApp();
+    const service = new NestNoteDocumentService(app, {
+      createdAt: created,
+      getMaxChildDepth: () => 0,
+    });
+
+    const node = await service.create(null, "Work");
+
+    expect(node.path).toBe("Work");
+    expect(app.vault.folders.has("Work")).toBe(true);
+    expect(app.vault.files.has("Work/index.md")).toBe(true);
+  });
+
+  it("rejects any child when the maximum child depth is zero", async () => {
+    const app = createApp((vault) => {
+      seedDocument(vault, "Work", workIndex());
+    });
+    const service = new NestNoteDocumentService(app, {
+      getMaxChildDepth: () => 0,
+    });
+
+    await expect(service.create("Work", "Child")).rejects.toThrow("层级");
+    expect(app.vault.folders.has("Work/Child")).toBe(false);
+    expect(app.vault.files.has("Work/Child/index.md")).toBe(false);
+    expect(app.vault.deleteCalls).toEqual([]);
+  });
+
+  it("treats a complete document under a regular folder as root depth", async () => {
+    const app = createApp((vault) => {
+      vault.folders.add("Archive");
+      seedDocument(vault, "Archive/Work", workIndex());
+    });
+    const service = new NestNoteDocumentService(app, {
+      createdAt: created,
+      getMaxChildDepth: () => 1,
+    });
+
+    const node = await service.create("Archive/Work", "Child");
+
+    expect(node.path).toBe("Archive/Work/Child");
+    expect(app.vault.folders.has("Archive/Work/Child")).toBe(true);
+    expect(app.vault.files.has("Archive/Work/Child/index.md")).toBe(true);
+  });
+
+  it("rejects a grandchild beyond one level under a regular-folder root without writing", async () => {
+    const app = createApp((vault) => {
+      vault.folders.add("Archive");
+      seedDocument(vault, "Archive/Work", workIndex());
+      seedDocument(
+        vault,
+        "Archive/Work/Child",
+        `---
+name: Child
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+    });
+    const service = new NestNoteDocumentService(app, {
+      getMaxChildDepth: () => 1,
+    });
+
+    await expect(service.create("Archive/Work/Child", "TooDeep")).rejects.toThrow(
+      "层级",
+    );
+    expect(app.vault.folders.has("Archive/Work/Child/TooDeep")).toBe(false);
+    expect(app.vault.files.has("Archive/Work/Child/TooDeep/index.md")).toBe(
+      false,
+    );
+    expect(app.vault.deleteCalls).toEqual([]);
   });
 });
 

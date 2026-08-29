@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { App, PluginManifest, WorkspaceLeaf } from "obsidian";
 import { Notice } from "obsidian";
 import NestNotePlugin from "../src/main";
+import {
+  DEFAULT_NESTNOTE_SETTINGS,
+  type NestNoteSettings,
+} from "../src/settings";
 import { VIEW_TYPE_NESTNOTE } from "../src/ui/document-tree-view";
 
 interface NoticeHarness {
@@ -53,6 +57,8 @@ interface PluginHarness {
   views: Map<string, (leaf: WorkspaceLeaf) => unknown>;
   registeredEvents: unknown[];
   registeredCleanups: Array<() => unknown>;
+  settingTabs: unknown[];
+  persistedData: unknown;
 }
 
 class FakeVault {
@@ -424,11 +430,19 @@ function createApp(seed?: (vault: FakeVault, workspace: FakeWorkspace) => void):
   return app;
 }
 
-function loadPlugin(app: FakeApp): NestNotePlugin {
+function loadPlugin(
+  app: FakeApp,
+  data?: Partial<NestNoteSettings>,
+): NestNotePlugin {
   const plugin = new NestNotePlugin(app as unknown as App, manifest);
-  const harness = plugin as unknown as PluginHarness;
+  const pluginHarness = plugin as unknown as PluginHarness;
+  if (data !== undefined) {
+    pluginHarness.persistedData = data;
+  }
   app.workspace.getViewCreator = (type) =>
-    harness.views.get(type) as ((leaf: WorkspaceLeaf) => unknown) | undefined;
+    pluginHarness.views.get(type) as
+      | ((leaf: WorkspaceLeaf) => unknown)
+      | undefined;
   return plugin;
 }
 
@@ -498,6 +512,253 @@ describe("NestNotePlugin assembly", () => {
     ).toBe(false);
     expect(harness(plugin).registeredEvents.length).toBeGreaterThanOrEqual(4);
     expect(harness(plugin).registeredCleanups.length).toBeGreaterThanOrEqual(1);
+    expect(harness(plugin).settingTabs).toHaveLength(1);
+  });
+
+  it("falls back to default settings when loadData fails", async () => {
+    const app = createApp();
+    const plugin = loadPlugin(app);
+    vi.spyOn(plugin, "loadData").mockRejectedValue(new Error("read failed"));
+
+    await expect(plugin.onload()).resolves.toBeUndefined();
+
+    expect(plugin.settings).toEqual(DEFAULT_NESTNOTE_SETTINGS);
+    expect(harness(plugin).views.has(VIEW_TYPE_NESTNOTE)).toBe(true);
+    expect(harness(plugin).settingTabs).toHaveLength(1);
+  });
+
+  it("opens the NestNote panel by default after layout is ready", async () => {
+    vi.useFakeTimers();
+    const app = createApp();
+    const plugin = loadPlugin(app);
+    await plugin.onload();
+    expect(app.workspace.getLeavesOfType(VIEW_TYPE_NESTNOTE)).toHaveLength(0);
+    app.workspace.markReady();
+    await settle();
+    expect(app.workspace.getLeavesOfType(VIEW_TYPE_NESTNOTE)).toHaveLength(1);
+  });
+
+  it("does not open the panel when startup opening is disabled", async () => {
+    vi.useFakeTimers();
+    const app = createApp();
+    const plugin = loadPlugin(app, {
+      openPanelOnStartup: false,
+    });
+    await plugin.onload();
+    app.workspace.markReady();
+    await settle();
+    expect(app.workspace.getLeavesOfType(VIEW_TYPE_NESTNOTE)).toHaveLength(0);
+  });
+
+  it("does not open or close the panel when the startup setting changes later", async () => {
+    vi.useFakeTimers();
+    const app = createApp();
+    const plugin = loadPlugin(app, {
+      openPanelOnStartup: false,
+    });
+    await plugin.onload();
+    app.workspace.markReady();
+    await settle();
+    expect(app.workspace.getLeavesOfType(VIEW_TYPE_NESTNOTE)).toHaveLength(0);
+
+    plugin.settings.openPanelOnStartup = true;
+    plugin.onSettingsChanged();
+    await settle();
+    expect(app.workspace.getLeavesOfType(VIEW_TYPE_NESTNOTE)).toHaveLength(0);
+
+    await plugin.activateView();
+    plugin.settings.openPanelOnStartup = false;
+    plugin.onSettingsChanged();
+    await settle();
+    expect(app.workspace.getLeavesOfType(VIEW_TYPE_NESTNOTE)).toHaveLength(1);
+  });
+
+  it("persists the current settings through saveSettings", async () => {
+    const app = createApp();
+    const plugin = loadPlugin(app);
+    await plugin.onload();
+    plugin.settings.maxChildDepth = 2;
+    plugin.settings.openPanelOnStartup = false;
+
+    await plugin.saveSettings();
+
+    expect(harness(plugin).persistedData).toEqual({
+      maxChildDepth: 2,
+      openPanelOnStartup: false,
+    });
+  });
+
+  it("scans with persisted max child depth after layout is ready", async () => {
+    vi.useFakeTimers();
+    const app = createApp((vault) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+      seedDocument(
+        vault,
+        "Work/Notes",
+        `---
+name: Notes
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+    });
+    const plugin = loadPlugin(app, { maxChildDepth: 0 });
+    await plugin.onload();
+    await plugin.activateView();
+    app.workspace.markReady();
+    await settle();
+
+    expect(document.querySelector('[data-path="Work"]')).not.toBeNull();
+    expect(document.querySelector('[data-path="Work/Notes"]')).toBeNull();
+  });
+
+  it("keeps hidden child links when the visible tree is pruned to root depth", async () => {
+    vi.useFakeTimers();
+    const app = createApp((vault) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+<!-- nestnote:children:start -->
+- [Notes](Notes/index.md)
+<!-- nestnote:children:end -->
+`,
+      );
+      seedDocument(
+        vault,
+        "Work/Notes",
+        `---
+name: Notes
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+    });
+    const plugin = loadPlugin(app, { maxChildDepth: 0 });
+    await plugin.onload();
+    await plugin.activateView();
+    app.workspace.markReady();
+    await settle();
+
+    expect(app.vault.files.get("Work/index.md")).toContain(
+      "[Notes](Notes/index.md)",
+    );
+    expect(document.querySelector('[data-path="Work"]')).not.toBeNull();
+    expect(document.querySelector('[data-path="Work/Notes"]')).toBeNull();
+  });
+
+  it("refreshes the tree with the current max child depth after settings change", async () => {
+    vi.useFakeTimers();
+    const app = createApp((vault) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+      seedDocument(
+        vault,
+        "Work/Notes",
+        `---
+name: Notes
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+    });
+    const plugin = loadPlugin(app);
+    await plugin.onload();
+    await plugin.activateView();
+    app.workspace.markReady();
+    await settle();
+
+    expect(document.querySelector('[data-path="Work"]')).not.toBeNull();
+    expect(document.querySelector('[data-path="Work/Notes"]')).not.toBeNull();
+
+    plugin.settings.maxChildDepth = 0;
+    plugin.onSettingsChanged();
+    await settle();
+
+    expect(document.querySelector('[data-path="Work"]')).not.toBeNull();
+    expect(document.querySelector('[data-path="Work/Notes"]')).toBeNull();
+  });
+
+  it("notices when opening the panel after layout ready fails", async () => {
+    vi.useFakeTimers();
+    const app = createApp();
+    const plugin = loadPlugin(app);
+    await plugin.onload();
+    vi.spyOn(plugin, "activateView").mockRejectedValue(
+      new Error("startup view failed"),
+    );
+    noticeHarness().messages = [];
+
+    app.workspace.markReady();
+    await settle();
+
+    expect(
+      noticeHarness().messages.some((message) =>
+        message.includes("startup view failed"),
+      ),
+    ).toBe(true);
+    expect(
+      noticeHarness().messages.some((message) =>
+        message.includes("设置保存失败"),
+      ),
+    ).toBe(false);
+  });
+
+  it("notices a refresh failure after settings change without claiming the save rolled back", async () => {
+    vi.useFakeTimers();
+    const app = createApp((vault) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+    });
+    const plugin = loadPlugin(app);
+    await plugin.onload();
+    app.workspace.markReady();
+    await settle();
+    noticeHarness().messages = [];
+    vi.spyOn(app.vault, "getAllLoadedFiles").mockImplementation(() => {
+      throw new Error("scan exploded");
+    });
+
+    plugin.settings.maxChildDepth = 1;
+    plugin.onSettingsChanged();
+    await settle();
+
+    expect(
+      noticeHarness().messages.some((message) =>
+        message.includes("scan exploded"),
+      ),
+    ).toBe(true);
+    expect(
+      noticeHarness().messages.some((message) =>
+        message.includes("设置保存失败"),
+      ),
+    ).toBe(false);
+    expect(plugin.settings.maxChildDepth).toBe(1);
   });
 
   it("scans and syncs frontmatter and child links after layout is ready", async () => {
@@ -784,6 +1045,54 @@ created: 2020-01-01T00:00:00Z
 
     await vi.advanceTimersByTimeAsync(400);
     expect(app.vault.modifyCount).toBe(afterCreate);
+  });
+
+  it("submits the command name modal on Enter once and prevents default", async () => {
+    vi.useFakeTimers();
+    const app = createApp();
+    const plugin = loadPlugin(app);
+    await plugin.onload();
+    app.workspace.markReady();
+    await settle();
+
+    const createSpy = vi.spyOn(
+      (plugin as unknown as { documents: { create: (...args: unknown[]) => Promise<unknown> } })
+        .documents,
+      "create",
+    );
+
+    command(plugin, "nestnote:new-document")();
+    const modal = document.querySelector(".nestnote-modal");
+    const input = modal?.querySelector("input");
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error("input missing");
+    }
+    const confirm = modal?.querySelector('[aria-label="确认"]');
+    if (!(confirm instanceof HTMLElement)) {
+      throw new Error("confirm missing");
+    }
+    input.value = "From Enter";
+    const enter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    input.dispatchEvent(enter);
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    confirm.click();
+    await settle();
+
+    expect(enter.defaultPrevented).toBe(true);
+    expect(createSpy).toHaveBeenCalledTimes(1);
+    expect(createSpy).toHaveBeenCalledWith(null, "From Enter");
+    expect(document.querySelector(".nestnote-modal")).toBeNull();
+    expect(app.vault.folders.has("From Enter")).toBe(true);
   });
 
   it("creates a child document from the active document via command", async () => {

@@ -1,6 +1,6 @@
 # NestNote
 
-NestNote 是一个 [Obsidian](https://obsidian.md/) 插件，将 **文件夹即文档** 作为知识组织模型。每个文档是一个包含 `index.md` 和 `attachments/` 的目录，可嵌套任意层级的子文档。插件通过自定义侧边栏展示和操作文档树，Vault 文件系统是唯一数据源，不引入额外索引数据库。
+NestNote 是一个 [Obsidian](https://obsidian.md/) 插件，将 **文件夹即文档** 作为知识组织模型。每个文档是一个包含 `index.md` 和 `attachments/` 的目录，可按设置嵌套子文档（默认最多 5 级，可在 `0～9` 间调整）。插件通过自定义侧边栏展示和操作文档树，Vault 文件系统是唯一数据源，不引入额外索引数据库。
 
 - **显示名称：** NestNote
 - **插件 ID：** `nest-note`
@@ -14,16 +14,18 @@ NestNote 是一个 [Obsidian](https://obsidian.md/) 插件，将 **文件夹即�
 git clone <仓库地址>
 cd notebookinfolder
 npm install
-npm run build
+./build.sh
 ```
 
-构建完成后，将以下三个文件复制到你的 Vault 的 `.obsidian/plugins/nest-note/` 目录：
+构建完成后，将 `nest-note/` 目录直接复制到你的 Vault 的 `.obsidian/plugins/` 下（即 `.obsidian/plugins/nest-note/`）。该目录包含：
 
 | 文件 | 说明 |
 |------|------|
 | `main.js` | 插件入口（构建产物） |
 | `manifest.json` | 插件清单 |
 | `styles.css` | 侧边栏与对话框样式 |
+
+`./build.sh clean` 只清除 `main.js`、`main.js.map`（若存在）和 `./nest-note/`，不执行构建。
 
 在 Obsidian 中打开 **设置 → 社区插件**，启用 **NestNote**。
 
@@ -148,7 +150,8 @@ created: 2026-08-28T19:00:00+08:00
 | 打开文档 | 点击侧边栏中的文档名称 |
 | 重命名 | 侧边栏文档行上的操作按钮 |
 | 删除 | 侧边栏文档行上的删除按钮；**任何删除均需确认** |
-| 刷新 | 命令 **NestNote：刷新**，或 Vault 文件变化后自动全量重新扫描 |
+| 全部展开 / 全部折叠 | 工具栏按钮。只要有一个可展开节点未展开，显示「全部展开」；全部展开后切换为「全部折叠」。没有可展开节点时按钮禁用。只更新视图展开状态，不触发文件扫描 |
+| 刷新 | 工具栏按钮、命令 **NestNote：刷新**，或 Vault 文件变化后自动全量重新扫描 |
 
 ### 新建入口说明
 
@@ -159,7 +162,16 @@ created: 2026-08-28T19:00:00+08:00
 | 侧边栏某文档行「新建子文档」 | 该行文档下 | 以目标节点为父文档 |
 | 命令 **NestNote：新建子文档**（`nestnote:new-child-document`） | 当前活动文档下 | **须先打开父文档的 `index.md`**；按编辑器当前活动文件所属文档创建，不读取侧边栏选中态 |
 
-名称包含路径禁止字符（`/ \ : * ? " < > |`）、Windows 保留设备名（CON、PRN、AUX、NUL、COM1–9、LPT1–9，含大小写与扩展名形式）、尾随点或尾随空格，或目标已存在时，操作被阻止并提示原因。
+名称对话框中输入名称后按 **Enter** 或点击确认即可创建并关闭对话框；空名称不提交。名称包含路径禁止字符（`/ \ : * ? " < > |`）、Windows 保留设备名（CON、PRN、AUX、NUL、COM1–9、LPT1–9，含大小写与扩展名形式）、尾随点或尾随空格，或目标已存在时，操作被阻止并提示原因。达到当前最大子文档层级后，新建更深子文档会被拒绝且不写入 Vault。
+
+## 设置
+
+在 Obsidian **设置 → NestNote** 中可配置：
+
+| 设置项 | 说明 |
+|--------|------|
+| 最大子文档层级 | 范围 `0～9`，默认 `5`。根文档为 `0` 级；超出限制的目录不显示，也无法创建更深子文档。设为 `0` 时只显示根文档 |
+| 启动时打开 NestNote 面板 | 默认开启。插件在布局准备且首次扫描完成后自动打开 NestNote 面板；关闭后下次启动不再自动打开 |
 
 ## 删除与回收站
 
@@ -191,19 +203,23 @@ created: 2026-08-28T19:00:00+08:00
 npm test              # Vitest 全量测试
 npx tsc --noEmit      # TypeScript 类型检查
 npm run build         # 生产构建
+bash build.sh clean   # 只清除产物，不构建
+bash build.sh         # 成功后写入 nest-note/
 ```
 
 | 检查项 | 结果 |
 |--------|------|
-| Vitest 全量测试 | 8 个测试文件，105 个用例全部通过 |
-| 单元测试（目录识别、Frontmatter、受控链接、路径编码等） | 通过 |
-| 集成测试（创建/重命名/删除、附件归档、事件同步、插件生命周期） | 通过 |
+| Vitest 全量测试 | 9 个测试文件，140 个用例全部通过 |
+| 单元测试（目录识别、Frontmatter、受控链接、路径编码、设置规范化、层级裁剪等） | 通过 |
+| 集成测试（创建/重命名/删除、附件归档、事件同步、插件生命周期、面板交互） | 通过 |
 | TypeScript 类型检查（`tsc --noEmit`） | 通过，无诊断输出 |
 | 生产构建（`esbuild` → `main.js`） | 通过 |
+| `bash build.sh clean` | 通过；清除 `main.js`、`main.js.map`（若存在）和 `./nest-note/`，不执行构建 |
+| `bash build.sh` | 通过；`nest-note/` 仅含 `main.js`、`manifest.json`、`styles.css` |
 
 ### 手工验收（需在 Obsidian 中验证）
 
-以下项目 **未在本 CI/开发环境中执行**，需要用户在真实 Obsidian Vault 中逐项确认：
+以下项目 **未在本开发环境中执行**，不要视为已通过。需要用户在真实 Obsidian Vault 中逐项确认：
 
 | # | 验收项 | 状态 |
 |---|--------|------|
@@ -215,6 +231,15 @@ npm run build         # 生产构建
 | 6 | 从回收站恢复目录，确认刷新后重新显示 | **未执行 — 需用户在 Obsidian 中验证** |
 | 7 | 快速连续执行文件操作，确认没有重复链接或无限刷新 | **未执行 — 需用户在 Obsidian 中验证** |
 | 8 | 使用含空格、中文和特殊字符的文档名称 | **未执行 — 需用户在 Obsidian 中验证** |
+| 9 | 默认启动后 NestNote 面板自动出现 | **未执行 — 需用户在 Obsidian 中验证** |
+| 10 | 关闭「启动时打开 NestNote 面板」后重启，面板不自动出现 | **未执行 — 需用户在 Obsidian 中验证** |
+| 11 | 默认最大层级下可创建到第 5 级，第 6 级被拒绝 | **未执行 — 需用户在 Obsidian 中验证** |
+| 12 | 最大子文档层级设为 `0` 时只显示根文档 | **未执行 — 需用户在 Obsidian 中验证** |
+| 13 | 最大子文档层级设为 `9` 时允许第 9 级 | **未执行 — 需用户在 Obsidian 中验证** |
+| 14 | 输入名称后按 Enter 能创建并关闭对话框 | **未执行 — 需用户在 Obsidian 中验证** |
+| 15 | 全部展开、全部折叠覆盖整棵树 | **未执行 — 需用户在 Obsidian 中验证** |
+| 16 | 设置页和新增按钮遵循当前 Obsidian 主题 | **未执行 — 需用户在 Obsidian 中验证** |
+| 17 | 从 `nest-note/` 复制到 Vault 插件目录后可正常启用 | **未执行 — 需用户在 Obsidian 中验证** |
 
 ### 已知限制
 
@@ -226,16 +251,20 @@ npm run build         # 生产构建
   - 命令 `nestnote:new-child-document` 须先打开父文档 `index.md`，按当前活动文件所属文档创建，不读取侧边栏选中态
 - 附件自动归档仅在能安全关联到当前活动 `index.md` 时触发：允许来源为当前文档目录直接子文件、Vault 根目录、或解析后的 `attachmentFolderPath`（含 `./` 相对路径）；`getNewFileParent(sourcePath)` 不作为附件目录。其他完整文档目录/`attachments/` 与无法判断的路径绝不移动，Vault 创建事件对此静默保留
 - 删除优先 `fileManager.trashFile`；旧版本 Obsidian 回退 `vault.trash(..., false)`（本地回收站）
+- **子文档层级：** 超出「最大子文档层级」的完整文档目录仍留在 Vault 中，但扫描结果不显示，也无法通过插件创建更深子文档
 
 ## 项目结构
 
 ```text
+build.sh                             # 生产构建并写入 nest-note/；clean 只清除产物
 main.js                              # 构建产物（插件入口）
 manifest.json                        # 插件清单
 styles.css                           # 侧边栏与对话框样式
+nest-note/                           # 可直接复制到 Vault 的安装目录
 src/
 ├── main.ts                          # 插件源码入口、命令、模块装配
 ├── types.ts                         # 共享类型
+├── settings.ts                      # 设置模型、默认值与规范化
 ├── domain/
 │   ├── document-scanner.ts          # 完整文档识别与树构建
 │   ├── frontmatter.ts               # Frontmatter 读写
@@ -245,7 +274,8 @@ src/
 │   ├── attachment-service.ts        # 附件监听与归档
 │   └── vault-event-coordinator.ts   # Vault 事件合并与刷新
 └── ui/
-    └── document-tree-view.ts        # 侧边栏视图
+    ├── document-tree-view.ts        # 侧边栏视图
+    └── settings-tab.ts              # 设置页
 tests/                               # Vitest 测试
 docs/superpowers/specs/              # 设计规格文档
 ```

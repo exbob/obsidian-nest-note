@@ -1,9 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { scanDocuments } from "../src/domain/document-scanner";
-import type { DocumentNode } from "../src/types";
+import type { DocumentNode, VaultEntry } from "../src/types";
 
 function collectNodes(nodes: DocumentNode[]): DocumentNode[] {
   return nodes.flatMap((node) => [node, ...collectNodes(node.children)]);
+}
+
+function documentChainEntries(count: number): VaultEntry[] {
+  const entries: VaultEntry[] = [];
+  const segments: string[] = [];
+  for (let level = 0; level <= count; level++) {
+    segments.push(`Level${level}`);
+    const path = segments.join("/");
+    entries.push(
+      { kind: "folder", path },
+      { kind: "file", path: `${path}/index.md` },
+      { kind: "folder", path: `${path}/attachments` },
+    );
+  }
+  return entries;
 }
 
 describe("scanDocuments", () => {
@@ -154,6 +169,31 @@ describe("scanDocuments", () => {
           },
         ],
       },
+    ]);
+  });
+
+  it("hides documents deeper than the configured child depth", () => {
+    const entries = documentChainEntries(6);
+    expect(scanDocuments(entries, { maxChildDepth: 5 })).toHaveLength(1);
+    expect(collectNodes(scanDocuments(entries, { maxChildDepth: 5 })).map((node) => node.path))
+      .toEqual(["Level0", "Level0/Level1", "Level0/Level1/Level2", "Level0/Level1/Level2/Level3", "Level0/Level1/Level2/Level3/Level4", "Level0/Level1/Level2/Level3/Level4/Level5"]);
+  });
+
+  it("shows only root documents when the limit is zero", () => {
+    expect(collectNodes(scanDocuments(documentChainEntries(2), { maxChildDepth: 0 })))
+      .toEqual([expect.objectContaining({ path: "Level0" })]);
+  });
+
+  it("defaults to max child depth 5 when options are omitted", () => {
+    expect(
+      collectNodes(scanDocuments(documentChainEntries(6))).map((node) => node.path),
+    ).toEqual([
+      "Level0",
+      "Level0/Level1",
+      "Level0/Level1/Level2",
+      "Level0/Level1/Level2/Level3",
+      "Level0/Level1/Level2/Level3/Level4",
+      "Level0/Level1/Level2/Level3/Level4/Level5",
     ]);
   });
 });

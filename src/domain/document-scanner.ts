@@ -1,4 +1,5 @@
-import type { DocumentNode, VaultEntry } from "../types";
+import { DEFAULT_NESTNOTE_SETTINGS } from "../settings";
+import type { DocumentNode, ScanDocumentsOptions, VaultEntry } from "../types";
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
@@ -32,7 +33,24 @@ function sortTree(nodes: DocumentNode[]): void {
   }
 }
 
-export function scanDocuments(entries: readonly VaultEntry[]): DocumentNode[] {
+function pruneToDepth(
+  nodes: DocumentNode[],
+  maxChildDepth: number,
+  depth: number,
+): DocumentNode[] {
+  if (depth > maxChildDepth) {
+    return [];
+  }
+  return nodes.map((node) => ({
+    ...node,
+    children: pruneToDepth(node.children, maxChildDepth, depth + 1),
+  }));
+}
+
+export function scanDocuments(
+  entries: readonly VaultEntry[],
+  options?: ScanDocumentsOptions,
+): DocumentNode[] {
   const files = new Set<string>();
   const folders = new Set<string>();
 
@@ -95,5 +113,9 @@ export function scanDocuments(entries: readonly VaultEntry[]): DocumentNode[] {
   }
 
   sortTree(roots);
-  return roots;
+  return pruneToDepth(
+    roots,
+    options?.maxChildDepth ?? DEFAULT_NESTNOTE_SETTINGS.maxChildDepth,
+    0,
+  );
 }

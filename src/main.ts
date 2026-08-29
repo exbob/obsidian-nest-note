@@ -33,11 +33,20 @@ import type {
   CoordinatorFileRef,
   EventRefLike,
 } from "./services/vault-event-coordinator";
+import {
+  DEFAULT_NESTNOTE_SETTINGS,
+  normalizeNestNoteSettings,
+  type NestNoteSettings,
+} from "./settings";
 import type { DocumentNode, DocumentService, VaultEntry } from "./types";
 import {
   DocumentTreeView,
   VIEW_TYPE_NESTNOTE,
 } from "./ui/document-tree-view";
+import {
+  NestNoteSettingTab,
+  type NestNoteSettingsHost,
+} from "./ui/settings-tab";
 
 const COMMAND_IDS = {
   openDocumentTree: "nestnote:open-document-tree",
@@ -47,7 +56,8 @@ const COMMAND_IDS = {
   archiveCurrentAttachment: "nestnote:archive-current-attachment",
 } as const;
 
-export default class NestNotePlugin extends Plugin {
+export default class NestNotePlugin extends Plugin implements NestNoteSettingsHost {
+  settings: NestNoteSettings = { ...DEFAULT_NESTNOTE_SETTINGS };
   private documents!: DocumentService;
   private attachments!: NestNoteAttachmentService;
   private coordinator!: NestNoteVaultEventCoordinator;
@@ -57,6 +67,13 @@ export default class NestNotePlugin extends Plugin {
   private stopped = false;
 
   async onload(): Promise<void> {
+    try {
+      this.settings = normalizeNestNoteSettings(await this.loadData());
+    } catch {
+      this.settings = { ...DEFAULT_NESTNOTE_SETTINGS };
+    }
+    this.addSettingTab(new NestNoteSettingTab(this.app, this));
+
     const notify = (message: string): void => {
       new Notice(message);
     };
@@ -81,7 +98,10 @@ export default class NestNotePlugin extends Plugin {
 
     const innerDocuments = new NestNoteDocumentService(
       createDocumentServiceApp(this.app),
-      { notice: notify },
+      {
+        notice: notify,
+        getMaxChildDepth: () => this.settings.maxChildDepth,
+      },
     );
     this.documents = wrapWithInternal(innerDocuments, this.coordinator);
     this.attachments = new NestNoteAttachmentService(
@@ -159,8 +179,27 @@ export default class NestNotePlugin extends Plugin {
     });
 
     this.app.workspace.onLayoutReady(() => {
-      void this.scanAndSync();
+      void this.initializeAfterLayout();
     });
+  }
+
+  async saveSettings(): Promise<void> {
+    await this.saveData(this.settings);
+  }
+
+  onSettingsChanged(): void {
+    void this.scanAndSync();
+  }
+
+  private async initializeAfterLayout(): Promise<void> {
+    await this.scanAndSync();
+    if (!this.stopped && this.settings.openPanelOnStartup) {
+      try {
+        await this.activateView();
+      } catch (error) {
+        new Notice(errorMessage(error));
+      }
+    }
   }
 
   private openDocumentTree(): void {
@@ -244,8 +283,9 @@ export default class NestNotePlugin extends Plugin {
     }
     try {
       await this.coordinator.runInternal(async () => {
-        this.nodes = scanFromApp(this.app);
-        await syncDocumentMetadata(this.app, this.nodes);
+        const metadataNodes = scanFromApp(this.app, 9);
+        this.nodes = scanFromApp(this.app, this.settings.maxChildDepth);
+        await syncDocumentMetadata(this.app, metadataNodes);
       });
       this.renderOpenViews();
     } catch (error) {
@@ -493,7 +533,7 @@ async function revealLeaf(
   workspaceWithLegacyFocus.setActiveLeaf(leaf, false, true);
 }
 
-function scanFromApp(app: App): DocumentNode[] {
+function scanFromApp(app: App, maxChildDepth: number): DocumentNode[] {
   const entries: VaultEntry[] = [];
   for (const entry of app.vault.getAllLoadedFiles()) {
     const path = normalizePath(entry.path);
@@ -505,7 +545,7 @@ function scanFromApp(app: App): DocumentNode[] {
       path,
     });
   }
-  return scanDocuments(entries);
+  return scanDocuments(entries, { maxChildDepth });
 }
 
 async function syncDocumentMetadata(
@@ -765,17 +805,23 @@ class CommandNameModal extends Modal {
     input.type = "text";
     input.setAttribute("aria-label", "文档名称");
 
+    let submitted = false;
     const submit = (): void => {
+      if (submitted) {
+        return;
+      }
       const name = input.value.trim();
       if (name === "") {
         return;
       }
+      submitted = true;
       this.onSubmit(name);
       this.close();
     };
 
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
+        event.preventDefault();
         submit();
       }
     });

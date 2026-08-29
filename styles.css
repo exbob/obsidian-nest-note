@@ -95,6 +95,16 @@
   color: var(--text-normal);
 }
 
+.nestnote-icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.nestnote-icon-button:disabled:hover {
+  background-color: transparent;
+  color: var(--text-muted);
+}
+
 .nestnote-twistie-spacer {
   flex: 0 0 22px;
   width: 22px;

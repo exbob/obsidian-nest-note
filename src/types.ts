@@ -2,6 +2,10 @@ export type VaultEntry =
   | { kind: "file"; path: string }
   | { kind: "folder"; path: string };
 
+export interface ScanDocumentsOptions {
+  maxChildDepth?: number;
+}
+
 export interface DocumentNode {
   name: string;
   path: string;

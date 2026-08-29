@@ -211,7 +211,7 @@ describe("DocumentTreeView", () => {
 
   it("labels toolbar and node actions for accessibility and icons", async () => {
     await mount();
-    for (const label of ["新建文档", "刷新"]) {
+    for (const label of ["新建文档", "全部展开", "刷新"]) {
       const button = toolbar(label);
       expect(button.tagName).toBe("BUTTON");
       expect(button.dataset.icon).toBeTruthy();
@@ -261,5 +261,71 @@ describe("DocumentTreeView", () => {
     await confirmModal();
     expect(documents.trash).toHaveBeenCalledWith("Work");
     expect(notice).not.toHaveBeenCalled();
+  });
+
+  it("submits and closes the name modal on Enter", async () => {
+    const { documents } = await mount();
+    action("Work", "新建子文档").click();
+    const modal = document.querySelector(".nestnote-modal");
+    const input = modal?.querySelector("input");
+    if (!(input instanceof HTMLInputElement)) throw new Error("input missing");
+    const confirm = modal?.querySelector('[aria-label="确认"]');
+    if (!(confirm instanceof HTMLElement)) throw new Error("confirm missing");
+    input.value = "From Enter";
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    input.dispatchEvent(event);
+    confirm.click();
+    await Promise.resolve();
+    expect(event.defaultPrevented).toBe(true);
+    expect(documents.create).toHaveBeenCalledTimes(1);
+    expect(documents.create).toHaveBeenCalledWith("Work", "From Enter");
+    expect(document.querySelector(".nestnote-modal")).toBeNull();
+  });
+
+  it("expands and collapses every expandable document", async () => {
+    const nestedTree = [
+      node("Work", "Work", [
+        node("Notes", "Work/Notes", [node("Draft", "Work/Notes/Draft")]),
+      ]),
+      node("Inbox", "Inbox"),
+    ];
+    const { requestRefresh } = await mount({ nodes: nestedTree });
+    const expandAll = toolbar("全部展开");
+    expect(expandAll).toBeInstanceOf(HTMLButtonElement);
+    expect((expandAll as HTMLButtonElement).disabled).toBe(false);
+    expect((expandAll as HTMLButtonElement).dataset.icon).toBe("chevrons-down");
+    expandAll.click();
+    expect(row("Work").classList.contains("is-expanded")).toBe(true);
+    expect(row("Work/Notes").classList.contains("is-expanded")).toBe(true);
+    expect(toolbar("全部折叠")).toBeTruthy();
+    expect((toolbar("全部折叠") as HTMLButtonElement).dataset.icon).toBe(
+      "chevrons-up",
+    );
+    expect(requestRefresh).not.toHaveBeenCalled();
+    toolbar("全部折叠").click();
+    expect(row("Work").classList.contains("is-expanded")).toBe(false);
+    expect(row("Work/Notes").classList.contains("is-expanded")).toBe(false);
+    expect(toolbar("全部展开")).toBeTruthy();
+    expect(requestRefresh).not.toHaveBeenCalled();
+  });
+
+  it("disables expand-all on an empty tree or a tree with no children", async () => {
+    await mount({ nodes: [] });
+    expect((toolbar("全部展开") as HTMLButtonElement).disabled).toBe(true);
+
+    document.body.replaceChildren();
+    await mount({ nodes: [node("Inbox", "Inbox")] });
+    expect((toolbar("全部展开") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("switches the toolbar toggle after every expandable node is opened", async () => {
+    await mount();
+    expect(toolbar("全部展开")).toBeTruthy();
+    action("Work", "展开").click();
+    expect(toolbar("全部折叠")).toBeTruthy();
   });
 });

@@ -7,6 +7,7 @@ import {
   FrontmatterParseError,
   ensureDocumentFrontmatter,
 } from "../domain/frontmatter";
+import { DEFAULT_NESTNOTE_SETTINGS } from "../settings";
 import type { DocumentNode, DocumentService, VaultEntry } from "../types";
 
 export class DocumentServiceError extends Error {
@@ -69,6 +70,7 @@ export interface DocumentServiceOptions {
   createdAt?: string;
   now?: () => Date;
   notice?: (message: string) => void;
+  getMaxChildDepth?: () => number;
 }
 
 const SIDEBAR_VIEW_TYPE = "nestnote-document-tree";
@@ -92,6 +94,16 @@ export class NestNoteDocumentService implements DocumentService {
 
     if (this.app.vault.getAbstractFileByPath(path) !== null) {
       throw new DocumentServiceError(`目标已存在：${path}`);
+    }
+
+    const maxChildDepth =
+      this.options.getMaxChildDepth?.() ??
+      DEFAULT_NESTNOTE_SETTINGS.maxChildDepth;
+    const childDepth = parent === null ? 0 : this.documentDepth(parent) + 1;
+    if (parent !== null && childDepth > maxChildDepth) {
+      throw new DocumentServiceError(
+        `已达到最大子文档层级（${maxChildDepth}）`,
+      );
     }
 
     const node: DocumentNode = {
@@ -266,6 +278,18 @@ export class NestNoteDocumentService implements DocumentService {
     return path;
   }
 
+  private documentDepth(path: string): number {
+    let depth = 0;
+    let current = getParentPath(normalizePath(path));
+    while (current !== null) {
+      if (this.isCompleteDocument(current)) {
+        depth += 1;
+      }
+      current = getParentPath(current);
+    }
+    return depth;
+  }
+
   private isCompleteDocument(path: string): boolean {
     const normalized = normalizePath(path);
     if (
@@ -374,7 +398,11 @@ export class NestNoteDocumentService implements DocumentService {
         ];
       },
     );
-    return scanDocuments(entries);
+    return scanDocuments(entries, {
+      maxChildDepth:
+        this.options.getMaxChildDepth?.() ??
+        DEFAULT_NESTNOTE_SETTINGS.maxChildDepth,
+    });
   }
 
   private runMetadata<T>(fn: () => T): T {

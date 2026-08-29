@@ -30,6 +30,8 @@ export class Plugin {
   readonly views = new Map<string, (leaf: unknown) => unknown>();
   readonly registeredEvents: unknown[] = [];
   readonly registeredCleanups: Array<() => unknown> = [];
+  readonly settingTabs: unknown[] = [];
+  persistedData: unknown = null;
 
   constructor(app: unknown, manifest: unknown) {
     this.app = app;
@@ -65,6 +67,18 @@ export class Plugin {
 
   register(cb: () => unknown): void {
     this.registeredCleanups.push(cb);
+  }
+
+  async loadData(): Promise<unknown> {
+    return this.persistedData;
+  }
+
+  async saveData(data: unknown): Promise<void> {
+    this.persistedData = data;
+  }
+
+  addSettingTab(settingTab: unknown): void {
+    this.settingTabs.push(settingTab);
   }
 }
 
@@ -114,6 +128,142 @@ export class Modal {
 
 export function setIcon(parent: HTMLElement, iconId: string): void {
   parent.dataset.icon = iconId;
+}
+
+export class SettingTab {
+  app: unknown;
+  containerEl: HTMLElement;
+
+  constructor(app: unknown) {
+    this.app = app;
+    this.containerEl = document.createElement("div");
+  }
+
+  display(): void {}
+
+  hide(): void {}
+}
+
+export class PluginSettingTab extends SettingTab {
+  plugin: Plugin;
+
+  constructor(app: unknown, plugin: Plugin) {
+    super(app);
+    this.plugin = plugin;
+  }
+}
+
+export class SliderComponent {
+  sliderEl: HTMLInputElement;
+  private value = 0;
+  private changeCallback: ((value: number) => unknown) | null = null;
+
+  constructor(containerEl: HTMLElement) {
+    this.sliderEl = document.createElement("input");
+    this.sliderEl.type = "range";
+    this.sliderEl.addEventListener("change", () => {
+      this.value = Number(this.sliderEl.value);
+      void this.changeCallback?.(this.value);
+    });
+    this.sliderEl.addEventListener("nestnote-test-change", (event) => {
+      void this.changeCallback?.((event as CustomEvent<number>).detail);
+    });
+    containerEl.appendChild(this.sliderEl);
+  }
+
+  setLimits(min: number, max: number, step: number): this {
+    this.sliderEl.min = String(min);
+    this.sliderEl.max = String(max);
+    this.sliderEl.step = String(step);
+    return this;
+  }
+
+  setValue(value: number): this {
+    this.value = value;
+    this.sliderEl.value = String(value);
+    return this;
+  }
+
+  getValue(): number {
+    return this.value;
+  }
+
+  onChange(callback: (value: number) => unknown): this {
+    this.changeCallback = callback;
+    return this;
+  }
+}
+
+export class ToggleComponent {
+  toggleEl: HTMLElement;
+  private value = false;
+  private changeCallback: ((value: boolean) => unknown) | null = null;
+
+  constructor(containerEl: HTMLElement) {
+    this.toggleEl = document.createElement("div");
+    this.toggleEl.setAttribute("role", "switch");
+    this.toggleEl.setAttribute("aria-checked", "false");
+    this.toggleEl.addEventListener("click", () => {
+      this.setValue(!this.value);
+      void this.changeCallback?.(this.value);
+    });
+    containerEl.appendChild(this.toggleEl);
+  }
+
+  setValue(on: boolean): this {
+    this.value = on;
+    this.toggleEl.setAttribute("aria-checked", String(on));
+    return this;
+  }
+
+  getValue(): boolean {
+    return this.value;
+  }
+
+  onChange(callback: (value: boolean) => unknown): this {
+    this.changeCallback = callback;
+    return this;
+  }
+}
+
+export class Setting {
+  settingEl: HTMLElement;
+  nameEl: HTMLElement;
+  descEl: HTMLElement;
+  controlEl: HTMLElement;
+
+  constructor(containerEl: HTMLElement) {
+    this.settingEl = document.createElement("div");
+    this.nameEl = document.createElement("div");
+    this.descEl = document.createElement("div");
+    this.controlEl = document.createElement("div");
+    this.settingEl.append(this.nameEl, this.descEl, this.controlEl);
+    containerEl.appendChild(this.settingEl);
+  }
+
+  setName(name: string): this {
+    this.nameEl.textContent = name;
+    return this;
+  }
+
+  setDesc(desc: string | DocumentFragment): this {
+    if (typeof desc === "string") {
+      this.descEl.textContent = desc;
+    } else {
+      this.descEl.append(desc);
+    }
+    return this;
+  }
+
+  addSlider(cb: (component: SliderComponent) => unknown): this {
+    cb(new SliderComponent(this.controlEl));
+    return this;
+  }
+
+  addToggle(cb: (component: ToggleComponent) => unknown): this {
+    cb(new ToggleComponent(this.controlEl));
+    return this;
+  }
 }
 
 export type WorkspaceLeaf = { app?: unknown };

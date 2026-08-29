@@ -14,6 +14,7 @@ export interface DocumentTreeViewOptions {
 
 export class DocumentTreeView extends ItemView {
   private treeEl: HTMLElement | null = null;
+  private allToggleButton: HTMLButtonElement | null = null;
   private nodes: readonly DocumentNode[] = [];
   private expanded = new Set<string>();
   private selected: string | null = null;
@@ -43,12 +44,16 @@ export class DocumentTreeView extends ItemView {
 
     const toolbar = document.createElement("div");
     toolbar.className = "nestnote-toolbar";
+    this.allToggleButton = iconButton("chevrons-down", "全部展开", () => {
+      this.toggleAllExpanded();
+    });
     toolbar.append(
       iconButton("plus", "新建文档", () => {
         this.openNameModal("新建文档", "", (name) =>
           this.options.documents.create(null, name),
         );
       }),
+      this.allToggleButton,
       iconButton("refresh-cw", "刷新", () => {
         this.options.requestRefresh();
       }),
@@ -63,6 +68,7 @@ export class DocumentTreeView extends ItemView {
 
   async onClose(): Promise<void> {
     this.treeEl = null;
+    this.allToggleButton = null;
     this.contentEl.replaceChildren();
   }
 
@@ -74,6 +80,7 @@ export class DocumentTreeView extends ItemView {
     if (this.selected !== null && !containsPath(nodes, this.selected)) {
       this.selected = null;
     }
+    this.syncAllToggleButton();
     if (this.treeEl === null) {
       return;
     }
@@ -175,6 +182,45 @@ export class DocumentTreeView extends ItemView {
     this.render(this.nodes);
   }
 
+  private expandablePaths(nodes: readonly DocumentNode[]): string[] {
+    return nodes.flatMap((node) => [
+      ...(node.children.length > 0 ? [node.path] : []),
+      ...this.expandablePaths(node.children),
+    ]);
+  }
+
+  private toggleAllExpanded(): void {
+    const paths = this.expandablePaths(this.nodes);
+    if (paths.length === 0) {
+      return;
+    }
+    const allExpanded = paths.every((path) => this.expanded.has(path));
+    if (allExpanded) {
+      for (const path of paths) {
+        this.expanded.delete(path);
+      }
+    } else {
+      for (const path of paths) {
+        this.expanded.add(path);
+      }
+    }
+    this.render(this.nodes);
+  }
+
+  private syncAllToggleButton(): void {
+    const button = this.allToggleButton;
+    if (button === null) {
+      return;
+    }
+    const paths = this.expandablePaths(this.nodes);
+    const allExpanded =
+      paths.length > 0 && paths.every((path) => this.expanded.has(path));
+    button.disabled = paths.length === 0;
+    const label = allExpanded ? "全部折叠" : "全部展开";
+    button.setAttribute("aria-label", label);
+    setIcon(button, allExpanded ? "chevrons-up" : "chevrons-down");
+  }
+
   private async openDocument(path: string): Promise<void> {
     this.selected = path;
     this.render(this.nodes);
@@ -239,17 +285,23 @@ class NestNoteNameModal extends Modal {
     input.value = this.initial;
     input.setAttribute("aria-label", "文档名称");
 
+    let submitted = false;
     const submit = (): void => {
+      if (submitted) {
+        return;
+      }
       const name = input.value.trim();
       if (name === "") {
         return;
       }
+      submitted = true;
       this.onSubmit(name);
       this.close();
     };
 
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
+        event.preventDefault();
         submit();
       }
     });
