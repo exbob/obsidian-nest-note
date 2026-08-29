@@ -1,5 +1,7 @@
 # NestNote
 
+[中文](README.md) | [English](README_en.md)
+
 NestNote 是一个 [Obsidian](https://obsidian.md/) 插件，将 **文件夹即文档** 作为知识组织模型。每个文档是一个包含 `index.md` 和 `attachments/` 的目录，可按设置嵌套子文档（默认最多 5 级，可在 `0～9` 间调整）。插件通过自定义侧边栏展示和操作文档树，Vault 文件系统是唯一数据源，不引入额外索引数据库。
 
 - **显示名称：** NestNote
@@ -277,6 +279,7 @@ src/
 ├── main.ts                          # 插件源码入口、命令、模块装配
 ├── types.ts                         # 共享类型
 ├── settings.ts                      # 设置模型、默认值与规范化
+├── i18n/                            # 中英文案与 t()
 ├── domain/
 │   ├── document-scanner.ts          # 完整文档识别与树构建
 │   ├── frontmatter.ts               # Frontmatter 读写
