@@ -81,4 +81,19 @@ describe("t", () => {
       "Target already exists: {path}",
     );
   });
+
+  it("translates move cycle errors", () => {
+    setLocaleForTests("zh");
+    expect(t("error.cannotMoveIntoSelf")).toBe("不能将文档移动到自身");
+    expect(t("error.cannotMoveIntoDescendant")).toBe(
+      "不能将文档移动到自己的子文档中",
+    );
+    setLocaleForTests("en");
+    expect(t("error.cannotMoveIntoSelf")).toBe(
+      "Cannot move a document into itself",
+    );
+    expect(t("error.cannotMoveIntoDescendant")).toBe(
+      "Cannot move a document into its descendant",
+    );
+  });
 });

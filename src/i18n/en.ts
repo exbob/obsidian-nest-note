@@ -44,4 +44,7 @@ export const en: Record<MessageKey, string> = {
   "error.nameInvalid": "Invalid document name: {name}",
   "error.parentMissing": "Parent document is missing or incomplete: {path}",
   "error.notCompleteDocument": "Not a complete NestNote document: {path}",
+  "error.cannotMoveIntoSelf": "Cannot move a document into itself",
+  "error.cannotMoveIntoDescendant":
+    "Cannot move a document into its descendant",
 };

@@ -36,4 +36,6 @@ export const zh: Record<MessageKey, string> = {
   "error.nameInvalid": "文档名称无效：{name}",
   "error.parentMissing": "父文档不存在或不完整：{path}",
   "error.notCompleteDocument": "不是完整的 NestNote 文档：{path}",
+  "error.cannotMoveIntoSelf": "不能将文档移动到自身",
+  "error.cannotMoveIntoDescendant": "不能将文档移动到自己的子文档中",
 };

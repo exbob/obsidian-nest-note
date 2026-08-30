@@ -34,6 +34,8 @@ export const MESSAGE_KEYS = [
   "error.nameInvalid",
   "error.parentMissing",
   "error.notCompleteDocument",
+  "error.cannotMoveIntoSelf",
+  "error.cannotMoveIntoDescendant",
 ] as const;
 
 export type MessageKey = (typeof MESSAGE_KEYS)[number];
