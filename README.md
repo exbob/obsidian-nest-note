@@ -30,6 +30,8 @@ You can also bind these commands under **Settings → Hotkeys**.
 
 When the vault has no NestNote documents yet, use **New document** in the sidebar toolbar (or the command **NestNote: New document**). It always creates at the vault root and ignores which sidebar row is selected. Enter a valid name in the dialog, then press **Enter** or confirm.
 
+After the document is created, NestNote opens its `index.md` and selects it in the sidebar (expanding ancestors when needed).
+
 Existing ordinary Markdown notes are not converted into NestNote documents, and the plugin does not complete directories that are missing `index.md` or `attachments/`. Create them with the plugin, or build the folders yourself using the convention below and then refresh.
 
 ### Sidebar
@@ -39,6 +41,7 @@ Existing ordinary Markdown notes are not converted into NestNote documents, and 
 | ------ | --- |
 | Open a document | Click the document name in the sidebar |
 | New child document | The button on that row; creates under that document |
+| Reparent | Drag a document onto another document to nest it, or onto empty space in the tree to make it a root document. Sibling order stays alphabetical |
 | Rename | Row **More** → Rename |
 | Delete | Row **More** → Delete; **every delete asks for confirmation** |
 | Expand all / Collapse all | Toolbar button. If any expandable node is still collapsed, the label is **Expand all**; after everything is expanded it becomes **Collapse all**. Disabled when nothing can be expanded. This only changes expansion state and does not rescan files |
@@ -80,8 +83,8 @@ Names in the command palette (prefixed with `NestNote:`):
 | Command | What it does |
 | ------- | ------------ |
 | Open document tree | Opens the NestNote pane |
-| New document | Creates a document at the vault root |
-| New child document | Creates a child under the currently open document |
+| New document | Creates a document at the vault root, then opens its `index.md` |
+| New child document | Creates a child under the currently open document, then opens its `index.md` |
 | Refresh | Rescans and refreshes the sidebar |
 | Archive current attachment | Moves the currently open attachment into its owning document’s `attachments/` |
 

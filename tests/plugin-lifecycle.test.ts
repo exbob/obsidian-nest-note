@@ -286,19 +286,38 @@ class FakeWorkspace {
     this.setActiveLeafCalls.push(leaf);
     this.setActiveLeafFocusArgs = args;
   }
+
+  getMostRecentLeaf(): FakeLeaf | null {
+    const last = this.leaves[this.leaves.length - 1];
+    return last === undefined ? null : last;
+  }
+
+  iterateRootLeaves(callback: (leaf: FakeLeaf) => void): void {
+    for (const leaf of this.leaves) {
+      callback(leaf);
+    }
+  }
 }
 
 class FakeLeaf {
   view: {
     onOpen?: () => Promise<void>;
     render?: (nodes: unknown) => void;
+    reveal?: (path: string) => void;
     contentEl?: HTMLElement;
-  } | null = null;
+    getViewType?: () => string;
+  } | null = {
+    getViewType: () => "markdown",
+  };
   viewType: string | null = null;
   app: unknown;
 
   constructor(private readonly workspace: FakeWorkspace) {
     this.app = workspace.owner;
+  }
+
+  getViewType(): string {
+    return this.viewType ?? "markdown";
   }
 
   async setViewState(state: { type: string; active?: boolean }): Promise<void> {
@@ -308,7 +327,9 @@ class FakeLeaf {
       this.view = creator(this as unknown as WorkspaceLeaf) as {
         onOpen?: () => Promise<void>;
         render?: (nodes: unknown) => void;
+        reveal?: (path: string) => void;
         contentEl?: HTMLElement;
+        getViewType?: () => string;
       };
       await this.view.onOpen?.();
       if (this.view.contentEl instanceof HTMLElement) {
@@ -1057,6 +1078,40 @@ created: 2020-01-01T00:00:00Z
     expect(app.vault.files.get("Work/index.md")).toContain(
       "[Notes](Notes/index.md)",
     );
+  });
+
+  it("opens the new document after the new-document command succeeds", async () => {
+    vi.useFakeTimers();
+    const app = createApp();
+    const plugin = loadPlugin(app);
+    await plugin.onload();
+    app.workspace.markReady();
+    await settle();
+
+    command(plugin, "nestnote:new-document")();
+    await confirmNameModal("Work");
+    await settle();
+
+    expect(app.workspace.opened).toContain("Work/index.md");
+  });
+
+  it("reveals the new document in an open NestNote pane", async () => {
+    vi.useFakeTimers();
+    const app = createApp();
+    const plugin = loadPlugin(app);
+    await plugin.onload();
+    app.workspace.markReady();
+    await settle();
+    await plugin.activateView();
+
+    command(plugin, "nestnote:new-document")();
+    await confirmNameModal("Journal");
+    await settle();
+
+    const selected = document.querySelector(
+      '.nestnote-node[data-path="Journal"].is-selected',
+    );
+    expect(selected).not.toBeNull();
   });
 
   it("does not create a child document unless the active file is the document index.md", async () => {

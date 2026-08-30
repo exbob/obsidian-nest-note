@@ -229,8 +229,41 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
         ? t("command.newDocument")
         : t("command.newChildDocument");
     new CommandNameModal(this.app, title, (name) => {
-      void this.runAction(() => this.documents.create(parentPath, name));
+      void this.createOpenAndReveal(parentPath, name);
     }).open();
+  }
+
+  private async createOpenAndReveal(
+    parentPath: string | null,
+    name: string,
+  ): Promise<void> {
+    let created: DocumentNode;
+    try {
+      created = await this.documents.create(parentPath, name);
+    } catch (error) {
+      if (!isAlreadyNoticed(error)) {
+        new Notice(errorMessage(error));
+      }
+      return;
+    }
+    try {
+      await this.documents.open(created.path);
+    } catch (error) {
+      if (!isAlreadyNoticed(error)) {
+        new Notice(errorMessage(error));
+      }
+    }
+    await this.scanAndSync();
+    this.revealInOpenViews(created.path);
+  }
+
+  private revealInOpenViews(path: string): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_NESTNOTE)) {
+      const view = leaf.view;
+      if (view instanceof DocumentTreeView) {
+        view.reveal(path);
+      }
+    }
   }
 
   private async archiveCurrentAttachment(): Promise<void> {
