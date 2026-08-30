@@ -3,5 +3,6 @@ main.js
 main.js.map
 .obsidian/
 .superpowers/
+.worktrees/
 coverage/
 /nest-note/
