@@ -251,6 +251,14 @@ created: 2020-01-01T00:00:00Z
 ${body}`;
 }
 
+function parentIndex(name: string, body = "# Body\n"): string {
+  return `---
+name: ${name}
+created: 2020-01-01T00:00:00Z
+---
+${body}`;
+}
+
 function expectedNewIndex(name: string, childrenHeading: string): string {
   return `---
 name: ${name}
@@ -763,6 +771,147 @@ created: 2020-01-01T00:00:00Z
 <!-- nestnote:children:end -->
 # Body
 `);
+  });
+});
+
+describe("NestNoteDocumentService.move", () => {
+  it("moves a root document under another root and updates parent links", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+      seedDocument(vault, "Inbox", parentIndex("Inbox", "# Inbox\n"));
+    });
+    const node = await service.move("Inbox", "Work");
+    expect(app.vault.renameCalls).toEqual([{ from: "Inbox", to: "Work/Inbox" }]);
+    expect(node.path).toBe("Work/Inbox");
+    expect(app.vault.getFolderByPath("Inbox")).toBeNull();
+    expect(app.vault.files.get("Work/index.md")).toContain("- [Inbox](Inbox/index.md)");
+    expect(app.vault.files.get("Work/index.md")).toContain("# Body");
+    expect(app.vault.files.get("Work/Inbox/index.md")).toContain("# Inbox");
+  });
+
+  it("moves a child to another parent then back to the vault root", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+      seedDocument(vault, "Office", parentIndex("Office", "# Office\n"));
+      seedDocument(vault, "Work/Notes", parentIndex("Notes", "# Notes\n"));
+    });
+    await service.move("Work/Notes", "Office");
+    expect(app.vault.getFolderByPath("Office/Notes")).not.toBeNull();
+    expect(app.vault.files.get("Work/index.md")).not.toContain("Notes");
+    expect(app.vault.files.get("Office/index.md")).toContain("- [Notes](Notes/index.md)");
+    const rooted = await service.move("Office/Notes", null);
+    expect(rooted.path).toBe("Notes");
+    expect(app.vault.getFolderByPath("Notes")).not.toBeNull();
+    expect(app.vault.files.get("Office/index.md")).not.toContain("Notes");
+  });
+
+  it("returns the same node without renaming when already under that parent", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+      seedDocument(vault, "Work/Notes", parentIndex("Notes"));
+      seedDocument(vault, "Inbox", parentIndex("Inbox"));
+    });
+    const beforeWork = app.vault.files.get("Work/index.md");
+    await service.move("Work/Notes", "Work");
+    await service.move("Inbox", null);
+    expect(app.vault.renameCalls).toEqual([]);
+    expect(app.vault.files.get("Work/index.md")).toBe(beforeWork);
+  });
+
+  it("rejects moving into itself or a descendant without renaming", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+      seedDocument(vault, "Work/Notes", parentIndex("Notes"));
+    });
+    await expect(service.move("Work", "Work")).rejects.toThrow(
+      t("error.cannotMoveIntoSelf"),
+    );
+    await expect(service.move("Work", "Work/Notes")).rejects.toThrow(
+      t("error.cannotMoveIntoDescendant"),
+    );
+    expect(app.vault.renameCalls).toEqual([]);
+    expect(app.vault.getFolderByPath("Work")).not.toBeNull();
+  });
+
+  it("rejects when the destination name already exists", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+      seedDocument(vault, "Office", parentIndex("Office"));
+      seedDocument(vault, "Work/Office", parentIndex("Office", "# nested\n"));
+    });
+    await expect(service.move("Office", "Work")).rejects.toThrow(
+      t("error.targetExists", { path: "Work/Office" }),
+    );
+    expect(app.vault.renameCalls).toEqual([]);
+  });
+
+  it("rejects a move that would exceed maxChildDepth including hidden descendants", async () => {
+    const app = createSeededAppWithDocumentChain(5);
+    seedDocument(
+      app.vault,
+      "Other",
+      parentIndex("Other"),
+    );
+    const service = new NestNoteDocumentService(app, {
+      getMaxChildDepth: () => 5,
+    });
+    await expect(service.move("Other", "Level0/Level1/Level2/Level3/Level4/Level5"))
+      .rejects.toThrow(t("error.maxDepthReached", { max: 5 }));
+    expect(app.vault.renameCalls).toEqual([]);
+
+    const shallow = createApp((vault) => {
+      seedDocument(vault, "A", parentIndex("A"));
+      seedDocument(vault, "B", parentIndex("B"));
+      seedDocument(vault, "B/C", parentIndex("C"));
+      seedDocument(vault, "B/C/D", parentIndex("D"));
+      seedDocument(vault, "B/C/D/E", parentIndex("E"));
+    });
+    const limited = new NestNoteDocumentService(shallow, {
+      getMaxChildDepth: () => 2,
+    });
+    await expect(limited.move("B", "A")).rejects.toThrow(
+      t("error.maxDepthReached", { max: 2 }),
+    );
+    expect(shallow.vault.renameCalls).toEqual([]);
+  });
+
+  it("keeps relative child links inside the moved document", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+      seedDocument(vault, "Office", parentIndex("Office"));
+      seedDocument(
+        vault,
+        "Work/Parent",
+        `---
+name: Parent
+created: 2020-01-01T00:00:00Z
+---
+# Parent
+
+<!-- nestnote:children:start -->
+- [Kid](Kid/index.md)
+<!-- nestnote:children:end -->
+`,
+      );
+      seedDocument(vault, "Work/Parent/Kid", parentIndex("Kid", "# Kid\n"));
+    });
+    await service.move("Work/Parent", "Office");
+    expect(app.vault.files.get("Office/Parent/index.md")).toContain(
+      "- [Kid](Kid/index.md)",
+    );
+    expect(app.vault.files.get("Office/Parent/Kid/index.md")).toContain("# Kid");
+  });
+
+  it("does not rename when the new parent metadata cannot be written", async () => {
+    const original = "---\nname: Broken\n# still body\n";
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", original);
+      seedDocument(vault, "Inbox", parentIndex("Inbox"));
+    });
+    await expect(service.move("Inbox", "Work")).rejects.toThrow(DocumentServiceError);
+    expect(app.vault.renameCalls).toEqual([]);
+    expect(app.vault.getFolderByPath("Inbox")).not.toBeNull();
+    expect(app.vault.files.get("Work/index.md")).toBe(original);
   });
 });
 

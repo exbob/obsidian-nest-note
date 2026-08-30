@@ -235,6 +235,78 @@ export class NestNoteDocumentService implements DocumentService {
     }
   }
 
+  async move(
+    documentPath: string,
+    newParentPath: string | null,
+  ): Promise<DocumentNode> {
+    const from = this.requireDocument(documentPath);
+    const newParent = this.resolveParent(newParentPath);
+    const oldParent = getParentPath(from);
+    if (oldParent === newParent) {
+      return this.requireScannedNode(from);
+    }
+    if (newParent === from) {
+      throw new DocumentServiceError(t("error.cannotMoveIntoSelf"));
+    }
+    if (newParent !== null && newParent.startsWith(`${from}/`)) {
+      throw new DocumentServiceError(t("error.cannotMoveIntoDescendant"));
+    }
+
+    const name = getName(from);
+    const to = newParent === null ? name : `${newParent}/${name}`;
+    if (this.app.vault.getAbstractFileByPath(to) !== null) {
+      throw new DocumentServiceError(t("error.targetExists", { path: to }));
+    }
+
+    const maxChildDepth =
+      this.options.getMaxChildDepth?.() ??
+      DEFAULT_NESTNOTE_SETTINGS.maxChildDepth;
+    const newRootDepth =
+      newParent === null ? 0 : this.documentDepth(newParent) + 1;
+    const deepest = newRootDepth + this.subtreeRelativeHeight(from);
+    if (deepest > maxChildDepth) {
+      throw new DocumentServiceError(
+        t("error.maxDepthReached", { max: maxChildDepth }),
+      );
+    }
+
+    const folder = this.app.vault.getFolderByPath(from);
+    if (folder === null) {
+      throw new DocumentServiceError(t("error.documentNotFound", { path: from }));
+    }
+
+    const preview: DocumentNode = {
+      name,
+      path: to,
+      indexPath: `${to}/index.md`,
+      attachmentsPath: `${to}/attachments`,
+      children: [],
+    };
+    if (oldParent !== null && this.isCompleteDocument(oldParent)) {
+      const current = this.requireScannedNode(oldParent);
+      await this.assertParentWritable(
+        oldParent,
+        current.children.filter((child) => child.path !== from),
+      );
+    }
+    if (newParent !== null) {
+      const current = this.requireScannedNode(newParent);
+      await this.assertParentWritable(newParent, [...current.children, preview]);
+    }
+
+    await this.app.vault.rename(folder, to);
+
+    const pendingWrites: PendingWrite[] = [];
+    if (oldParent !== null && this.isCompleteDocument(oldParent)) {
+      pendingWrites.push(await this.freshParentWrite(oldParent));
+    }
+    if (newParent !== null && this.isCompleteDocument(newParent)) {
+      pendingWrites.push(await this.freshParentWrite(newParent));
+    }
+    await this.flushWrites(pendingWrites);
+    return this.requireScannedNode(to);
+  }
+
   async open(documentPath: string): Promise<void> {
     const path = this.requireDocument(documentPath);
     const indexFile = this.requireIndex(path);
@@ -410,6 +482,28 @@ export class NestNoteDocumentService implements DocumentService {
     });
   }
 
+  private subtreeRelativeHeight(path: string): number {
+    const entries: VaultEntry[] = this.app.vault.getAllLoadedFiles().flatMap(
+      (entry) => {
+        const normalized = normalizePath(entry.path);
+        if (normalized === "") {
+          return [];
+        }
+        return [
+          {
+            kind: Array.isArray(entry.children) ? "folder" : "file",
+            path: normalized,
+          } satisfies VaultEntry,
+        ];
+      },
+    );
+    const node = findNode(scanDocuments(entries, { maxChildDepth: 9 }), path);
+    if (node === null) {
+      return 0;
+    }
+    return relativeHeight(node);
+  }
+
   private runMetadata<T>(fn: () => T): T {
     try {
       return fn();
@@ -507,6 +601,15 @@ function findNode(
     }
   }
   return null;
+}
+
+function relativeHeight(node: DocumentNode): number {
+  if (node.children.length === 0) {
+    return 0;
+  }
+  return Math.max(
+    ...node.children.map((child) => 1 + relativeHeight(child)),
+  );
 }
 
 function errorMessage(error: unknown): string {

@@ -18,5 +18,6 @@ export interface DocumentService {
   create(parentPath: string | null, name: string): Promise<DocumentNode>;
   rename(documentPath: string, newName: string): Promise<DocumentNode>;
   trash(documentPath: string): Promise<void>;
+  move(documentPath: string, newParentPath: string | null): Promise<DocumentNode>;
   open(documentPath: string): Promise<void>;
 }

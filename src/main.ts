@@ -320,6 +320,8 @@ function wrapWithInternal(
       coordinator.runInternal(() => inner.rename(documentPath, newName)),
     trash: (documentPath) =>
       coordinator.runInternal(() => inner.trash(documentPath)),
+    move: (documentPath, newParentPath) =>
+      coordinator.runInternal(() => inner.move(documentPath, newParentPath)),
     open: (documentPath) => inner.open(documentPath),
   };
 }
