@@ -28,6 +28,7 @@ export const en: Record<MessageKey, string> = {
   "ui.deleteDocument": "Delete document",
   "ui.deleteConfirm":
     'Deleting "{name}" will move the entire subtree to the trash.',
+  "ui.childrenHeading": "Child Document",
   "notice.openChildRequiresDocument":
     "Open a NestNote document before creating a child document",
   "notice.attachmentNoActiveFile":

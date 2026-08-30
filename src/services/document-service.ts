@@ -129,7 +129,7 @@ export class NestNoteDocumentService implements DocumentService {
       createdPaths.push(node.attachmentsPath);
       await this.app.vault.create(
         node.indexPath,
-        ensureDocumentFrontmatter("", {
+        ensureDocumentFrontmatter(initialIndexBody(documentName), {
           name: documentName,
           created: this.createdTimestamp(),
         }),
@@ -526,4 +526,17 @@ export function formatIso8601(date: Date): string {
   const sign = offsetMinutes >= 0 ? "+" : "-";
   const abs = Math.abs(offsetMinutes);
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+}
+
+function initialIndexBody(name: string): string {
+  return [
+    `# ${name}`,
+    "",
+    "",
+    `## ${t("ui.childrenHeading")}`,
+    "",
+    "<!-- nestnote:children:start -->",
+    "<!-- nestnote:children:end -->",
+    "",
+  ].join("\n");
 }

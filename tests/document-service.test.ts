@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { t } from "../src/i18n";
+import { setLocaleForTests, t } from "../src/i18n";
 import {
   DocumentServiceError,
   NestNoteDocumentService,
@@ -251,6 +251,21 @@ created: 2020-01-01T00:00:00Z
 ${body}`;
 }
 
+function expectedNewIndex(name: string, childrenHeading: string): string {
+  return `---
+name: ${name}
+created: ${created}
+---
+# ${name}
+
+
+## ${childrenHeading}
+
+<!-- nestnote:children:start -->
+<!-- nestnote:children:end -->
+`;
+}
+
 function createApp(seed?: (vault: FakeVault) => void): FakeApp {
   const vault = new FakeVault();
   seed?.(vault);
@@ -304,11 +319,9 @@ describe("NestNoteDocumentService.create", () => {
 
     expect([...app.vault.folders].sort()).toEqual(["Work", "Work/attachments"]);
     expect([...app.vault.files.keys()]).toEqual(["Work/index.md"]);
-    expect(app.vault.files.get("Work/index.md")).toBe(`---
-name: Work
-created: 2026-08-28T19:00:00+08:00
----
-`);
+    expect(app.vault.files.get("Work/index.md")).toBe(
+      expectedNewIndex("Work", "子文档"),
+    );
     expect(node).toEqual({
       name: "Work",
       path: "Work",
@@ -339,6 +352,31 @@ created: 2026-08-28T19:00:00+08:00
       "- [文档1](文档1/index.md)",
     );
     expect(app.vault.files.get("Work/index.md")).toContain("# Body");
+  });
+
+  it("writes an H1 title, localized children heading, and empty child-link region into a new child index", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+    });
+
+    await service.create("Work", "Computer");
+
+    expect(app.vault.files.get("Work/Computer/index.md")).toBe(
+      expectedNewIndex("Computer", "子文档"),
+    );
+  });
+
+  it("uses the English children heading when the UI locale is English", async () => {
+    setLocaleForTests("en");
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+    });
+
+    await service.create("Work", "Computer");
+
+    expect(app.vault.files.get("Work/Computer/index.md")).toBe(
+      expectedNewIndex("Computer", "Child Document"),
+    );
   });
 
   it("re-reads the parent index before writing child links so a concurrent body edit is kept", async () => {

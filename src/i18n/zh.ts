@@ -24,6 +24,7 @@ export const zh: Record<MessageKey, string> = {
   "ui.documentName": "文档名称",
   "ui.deleteDocument": "删除文档",
   "ui.deleteConfirm": "删除「{name}」会将整个子树移入回收站。",
+  "ui.childrenHeading": "子文档",
   "notice.openChildRequiresDocument": "请先打开一个 NestNote 文档再新建子文档",
   "notice.attachmentNoActiveFile": "无法判断附件归属，当前没有活动文件",
   "notice.attachmentKept": "无法判断附件归属，已保留原位置：{path}",

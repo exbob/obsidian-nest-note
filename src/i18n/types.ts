@@ -22,6 +22,7 @@ export const MESSAGE_KEYS = [
   "ui.documentName",
   "ui.deleteDocument",
   "ui.deleteConfirm",
+  "ui.childrenHeading",
   "notice.openChildRequiresDocument",
   "notice.attachmentNoActiveFile",
   "notice.attachmentKept",
