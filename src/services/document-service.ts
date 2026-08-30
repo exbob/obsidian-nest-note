@@ -460,22 +460,23 @@ export class NestNoteDocumentService implements DocumentService {
     return node;
   }
 
+  private collectVaultEntries(): VaultEntry[] {
+    return this.app.vault.getAllLoadedFiles().flatMap((entry) => {
+      const path = normalizePath(entry.path);
+      if (path === "") {
+        return [];
+      }
+      return [
+        {
+          kind: Array.isArray(entry.children) ? "folder" : "file",
+          path,
+        } satisfies VaultEntry,
+      ];
+    });
+  }
+
   private scan(): DocumentNode[] {
-    const entries: VaultEntry[] = this.app.vault.getAllLoadedFiles().flatMap(
-      (entry) => {
-        const path = normalizePath(entry.path);
-        if (path === "") {
-          return [];
-        }
-        return [
-          {
-            kind: Array.isArray(entry.children) ? "folder" : "file",
-            path,
-          } satisfies VaultEntry,
-        ];
-      },
-    );
-    return scanDocuments(entries, {
+    return scanDocuments(this.collectVaultEntries(), {
       maxChildDepth:
         this.options.getMaxChildDepth?.() ??
         DEFAULT_NESTNOTE_SETTINGS.maxChildDepth,
@@ -483,20 +484,7 @@ export class NestNoteDocumentService implements DocumentService {
   }
 
   private subtreeRelativeHeight(path: string): number {
-    const entries: VaultEntry[] = this.app.vault.getAllLoadedFiles().flatMap(
-      (entry) => {
-        const normalized = normalizePath(entry.path);
-        if (normalized === "") {
-          return [];
-        }
-        return [
-          {
-            kind: Array.isArray(entry.children) ? "folder" : "file",
-            path: normalized,
-          } satisfies VaultEntry,
-        ];
-      },
-    );
+    const entries = this.collectVaultEntries();
     const node = findNode(scanDocuments(entries, { maxChildDepth: 9 }), path);
     if (node === null) {
       return 0;
