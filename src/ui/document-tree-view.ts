@@ -9,7 +9,7 @@ export const VIEW_TYPE_NESTNOTE = "nestnote-document-tree";
 export interface DocumentTreeViewOptions {
   documents: DocumentService;
   getNodes: () => readonly DocumentNode[];
-  requestRefresh: () => void;
+  requestRefresh: () => Promise<void>;
   notice?: (message: string) => void;
 }
 
@@ -50,7 +50,7 @@ export class DocumentTreeView extends ItemView {
     toolbar.append(
       iconButton("plus", t("command.newDocument"), () => {
         this.openNameModal(t("command.newDocument"), "", (name) =>
-          this.options.documents.create(null, name),
+          this.createAndOpen(null, name),
         );
       }),
       this.allToggleButton,
@@ -135,7 +135,7 @@ export class DocumentTreeView extends ItemView {
       iconButton("plus-circle", t("command.newChildDocument"), (event) => {
         event.stopPropagation();
         this.openNameModal(t("command.newChildDocument"), "", (name) =>
-          this.options.documents.create(node.path, name),
+          this.createAndOpen(node.path, name),
         );
       }),
       iconButton("ellipsis-vertical", t("ui.more"), (event) => {
@@ -146,7 +146,7 @@ export class DocumentTreeView extends ItemView {
           item.setIcon("pencil");
           item.onClick(() => {
             this.openNameModal(t("ui.rename"), node.name, (name) =>
-              this.options.documents.rename(node.path, name),
+              this.run(() => this.options.documents.rename(node.path, name)),
             );
           });
         });
@@ -231,13 +231,41 @@ export class DocumentTreeView extends ItemView {
     }
   }
 
+  reveal(path: string): void {
+    this.selected = path;
+    for (const ancestor of ancestorPaths(path)) {
+      this.expanded.add(ancestor);
+    }
+    this.render(this.nodes);
+  }
+
+  private async createAndOpen(
+    parentPath: string | null,
+    name: string,
+  ): Promise<void> {
+    let created: DocumentNode;
+    try {
+      created = await this.options.documents.create(parentPath, name);
+    } catch (error) {
+      this.fail(error);
+      return;
+    }
+    try {
+      await this.options.documents.open(created.path);
+    } catch (error) {
+      this.fail(error);
+    }
+    await this.options.requestRefresh();
+    this.reveal(created.path);
+  }
+
   private openNameModal(
     title: string,
     initial: string,
     submit: (name: string) => Promise<unknown>,
   ): void {
     new NestNoteNameModal(this.app, title, initial, (name) => {
-      void this.run(async () => submit(name));
+      void submit(name);
     }).open();
   }
 
@@ -251,7 +279,7 @@ export class DocumentTreeView extends ItemView {
   private async run(action: () => Promise<unknown>): Promise<void> {
     try {
       await action();
-      this.options.requestRefresh();
+      await this.options.requestRefresh();
     } catch (error) {
       this.fail(error);
     }
@@ -379,6 +407,15 @@ function iconButton(
   setIcon(button, icon);
   button.addEventListener("click", onClick);
   return button;
+}
+
+function ancestorPaths(path: string): string[] {
+  const parts = path.split("/").filter((part) => part !== "");
+  const ancestors: string[] = [];
+  for (let i = 1; i < parts.length; i++) {
+    ancestors.push(parts.slice(0, i).join("/"));
+  }
+  return ancestors;
 }
 
 function containsPath(nodes: readonly DocumentNode[], path: string): boolean {

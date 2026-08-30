@@ -37,10 +37,11 @@ async function mount(options: MountOptions = {}) {
     create: vi.fn().mockResolvedValue(node("Work", "Work")),
     rename: vi.fn().mockResolvedValue(node("Work", "Work")),
     trash: vi.fn().mockResolvedValue(undefined),
+    move: vi.fn().mockResolvedValue(node("Work", "Work")),
     open: vi.fn().mockResolvedValue(undefined),
     ...options.documents,
   };
-  const requestRefresh = vi.fn();
+  const requestRefresh = vi.fn(async () => undefined);
   const notice = vi.fn();
   const nodes = options.nodes ?? sampleTree;
   const view = new DocumentTreeView({ app: {} } as unknown as WorkspaceLeaf, {
@@ -111,6 +112,12 @@ async function confirmModal(name?: string): Promise<void> {
   await Promise.resolve();
 }
 
+async function flush(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 afterEach(async () => {
   document.body.replaceChildren();
 });
@@ -156,7 +163,9 @@ describe("DocumentTreeView", () => {
     const { documents, requestRefresh } = await mount();
     toolbar(t("command.newDocument")).click();
     await confirmModal("Journal");
+    await flush();
     expect(documents.create).toHaveBeenCalledWith(null, "Journal");
+    expect(documents.open).toHaveBeenCalledWith("Work");
     expect(requestRefresh).toHaveBeenCalled();
   });
 
@@ -164,8 +173,113 @@ describe("DocumentTreeView", () => {
     const { documents } = await mount();
     action("Work", t("command.newChildDocument")).click();
     await confirmModal("Drafts");
+    await flush();
     expect(documents.create).toHaveBeenCalledWith("Work", "Drafts");
-    expect(documents.open).not.toHaveBeenCalled();
+    expect(documents.open).toHaveBeenCalledWith("Work");
+  });
+
+  it("opens, refreshes, and reveals a created root document", async () => {
+    const created = node("Journal", "Journal");
+    let current = sampleTree;
+    const requestRefresh = vi.fn(async () => {
+      current = [...sampleTree, created];
+      view.render(current);
+    });
+    const documents: DocumentService = {
+      create: vi.fn().mockResolvedValue(created),
+      rename: vi.fn(),
+      trash: vi.fn(),
+      move: vi.fn(),
+      open: vi.fn().mockResolvedValue(undefined),
+    };
+    const view = new DocumentTreeView({ app: {} } as unknown as WorkspaceLeaf, {
+      documents,
+      getNodes: () => current,
+      requestRefresh,
+    });
+    await view.onOpen();
+    document.body.appendChild(view.contentEl);
+    toolbar(t("command.newDocument")).click();
+    await confirmModal("Journal");
+    await flush();
+    expect(documents.create).toHaveBeenCalledWith(null, "Journal");
+    expect(documents.open).toHaveBeenCalledWith("Journal");
+    expect(requestRefresh).toHaveBeenCalled();
+    expect(row("Journal").classList.contains("is-selected")).toBe(true);
+  });
+
+  it("expands ancestors when revealing a nested new child", async () => {
+    const created = node("Drafts", "Work/Notes/Drafts");
+    let current = sampleTree;
+    const requestRefresh = vi.fn(async () => {
+      current = [
+        node("Work", "Work", [
+          node("Notes", "Work/Notes", [created]),
+        ]),
+        node("Inbox", "Inbox"),
+      ];
+      view.render(current);
+    });
+    const documents: DocumentService = {
+      create: vi.fn().mockResolvedValue(created),
+      rename: vi.fn(),
+      trash: vi.fn(),
+      move: vi.fn(),
+      open: vi.fn().mockResolvedValue(undefined),
+    };
+    const view = new DocumentTreeView({ app: {} } as unknown as WorkspaceLeaf, {
+      documents,
+      getNodes: () => current,
+      requestRefresh,
+    });
+    await view.onOpen();
+    document.body.appendChild(view.contentEl);
+    action("Work/Notes", t("command.newChildDocument")).click();
+    await confirmModal("Drafts");
+    await flush();
+    expect(documents.open).toHaveBeenCalledWith("Work/Notes/Drafts");
+    expect(row("Work").classList.contains("is-expanded")).toBe(true);
+    expect(row("Work/Notes").classList.contains("is-expanded")).toBe(true);
+    expect(row("Work/Notes/Drafts").classList.contains("is-selected")).toBe(true);
+  });
+
+  it("still refreshes and reveals when open fails after create", async () => {
+    const created = node("Journal", "Journal");
+    const notice = vi.fn();
+    let current = sampleTree;
+    const requestRefresh = vi.fn(async () => {
+      current = [...sampleTree, created];
+      view.render(current);
+    });
+    const documents: DocumentService = {
+      create: vi.fn().mockResolvedValue(created),
+      rename: vi.fn(),
+      trash: vi.fn(),
+      move: vi.fn(),
+      open: vi.fn().mockRejectedValue(new Error("open failed")),
+    };
+    const view = new DocumentTreeView({ app: {} } as unknown as WorkspaceLeaf, {
+      documents,
+      getNodes: () => current,
+      requestRefresh,
+      notice,
+    });
+    await view.onOpen();
+    document.body.appendChild(view.contentEl);
+    toolbar(t("command.newDocument")).click();
+    await confirmModal("Journal");
+    await flush();
+    expect(documents.create).toHaveBeenCalled();
+    expect(notice).toHaveBeenCalled();
+    expect(requestRefresh).toHaveBeenCalled();
+    expect(row("Journal").classList.contains("is-selected")).toBe(true);
+  });
+
+  it("selects a path and expands its ancestors", async () => {
+    const { view } = await mount();
+    view.reveal("Work/Notes");
+    expect(row("Work").classList.contains("is-expanded")).toBe(true);
+    expect(row("Work/Notes").classList.contains("is-selected")).toBe(true);
   });
 
   it("renames a document from the more menu", async () => {

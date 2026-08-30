@@ -120,9 +120,7 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
         new DocumentTreeView(leaf, {
           documents: this.documents,
           getNodes: () => this.nodes,
-          requestRefresh: () => {
-            void this.scanAndSync();
-          },
+          requestRefresh: () => this.scanAndSync(),
           notice: notify,
         }),
     );
