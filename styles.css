@@ -144,3 +144,12 @@ button.nestnote-icon-button:disabled:hover {
   outline: 2px solid var(--interactive-accent);
   outline-offset: 1px;
 }
+
+.nestnote-node.is-drop-target > .nestnote-row {
+  background-color: var(--nav-item-background-hover);
+  box-shadow: inset 0 0 0 1px var(--interactive-accent);
+}
+
+.nestnote-tree.is-drop-root {
+  box-shadow: inset 0 0 0 1px var(--interactive-accent);
+}

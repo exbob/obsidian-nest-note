@@ -6,6 +6,9 @@ import { isAlreadyNoticed } from "../services/document-service";
 
 export const VIEW_TYPE_NESTNOTE = "nestnote-document-tree";
 
+export const NESTNOTE_DOCUMENT_DRAG_MIME =
+  "application/x-nestnote-document-path";
+
 export interface DocumentTreeViewOptions {
   documents: DocumentService;
   getNodes: () => readonly DocumentNode[];
@@ -61,6 +64,28 @@ export class DocumentTreeView extends ItemView {
 
     const tree = createEl("div", { cls: "nestnote-tree" });
     this.treeEl = tree;
+    tree.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      this.clearDropHighlights();
+      tree.classList.add("is-drop-root");
+    });
+    tree.addEventListener("dragleave", () => {
+      tree.classList.remove("is-drop-root");
+    });
+    tree.addEventListener("drop", (event) => {
+      event.preventDefault();
+      this.clearDropHighlights();
+      const source = event.dataTransfer?.getData(NESTNOTE_DOCUMENT_DRAG_MIME) ?? "";
+      const closestNode =
+        event.target instanceof Element
+          ? event.target.closest(".nestnote-node")
+          : null;
+      const parent =
+        closestNode instanceof HTMLElement
+          ? (closestNode.dataset.path ?? null)
+          : null;
+      void this.handleDrop(source, parent);
+    });
     this.contentEl.append(toolbar, tree);
     this.render(this.options.getNodes());
   }
@@ -105,6 +130,40 @@ export class DocumentTreeView extends ItemView {
     }
 
     const row = createEl("div", { cls: "nestnote-row" });
+    row.draggable = true;
+    row.addEventListener("dragstart", (event) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest("button") !== null) {
+        event.preventDefault();
+        return;
+      }
+      event.dataTransfer?.setData(NESTNOTE_DOCUMENT_DRAG_MIME, node.path);
+      if (event.dataTransfer !== null) {
+        event.dataTransfer.effectAllowed = "move";
+      }
+    });
+    row.addEventListener("dragend", () => {
+      this.clearDropHighlights();
+    });
+
+    item.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.clearDropHighlights();
+      item.classList.add("is-drop-target");
+    });
+    item.addEventListener("dragleave", (event) => {
+      if (event.currentTarget instanceof HTMLElement) {
+        event.currentTarget.classList.remove("is-drop-target");
+      }
+    });
+    item.addEventListener("drop", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.clearDropHighlights();
+      const source = event.dataTransfer?.getData(NESTNOTE_DOCUMENT_DRAG_MIME) ?? "";
+      void this.handleDrop(source, node.path);
+    });
 
     if (node.children.length > 0) {
       const expanded = this.expanded.has(node.path);
@@ -237,6 +296,32 @@ export class DocumentTreeView extends ItemView {
       this.expanded.add(ancestor);
     }
     this.render(this.nodes);
+  }
+
+  private clearDropHighlights(): void {
+    this.treeEl?.classList.remove("is-drop-root");
+    this.treeEl
+      ?.querySelectorAll(".is-drop-target")
+      .forEach((el) => el.classList.remove("is-drop-target"));
+  }
+
+  private async handleDrop(
+    sourcePath: string,
+    newParentPath: string | null,
+  ): Promise<void> {
+    if (sourcePath === "") {
+      return;
+    }
+    try {
+      const moved = await this.options.documents.move(
+        sourcePath,
+        newParentPath,
+      );
+      await this.options.requestRefresh();
+      this.reveal(moved.path);
+    } catch (error) {
+      this.fail(error);
+    }
   }
 
   private async createAndOpen(

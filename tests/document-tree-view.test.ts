@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceLeaf } from "obsidian";
 import {
   DocumentTreeView,
+  NESTNOTE_DOCUMENT_DRAG_MIME,
   VIEW_TYPE_NESTNOTE,
 } from "../src/ui/document-tree-view";
 import type { DocumentNode, DocumentService } from "../src/types";
@@ -116,6 +117,44 @@ async function flush(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
+}
+
+function dispatchDrag(
+  target: EventTarget,
+  type: string,
+  path?: string,
+): DragEvent {
+  const data: Record<string, string> = {};
+  if (path !== undefined && type !== "dragstart") {
+    data[NESTNOTE_DOCUMENT_DRAG_MIME] = path;
+  }
+  const dataTransfer = {
+    effectAllowed: "move",
+    dropEffect: "move",
+    setData(kind: string, value: string) {
+      data[kind] = value;
+    },
+    getData(kind: string) {
+      return data[kind] ?? "";
+    },
+  };
+  const event = new DragEvent(type, {
+    bubbles: true,
+    cancelable: true,
+  });
+  Object.defineProperty(event, "dataTransfer", {
+    value: dataTransfer,
+  });
+  target.dispatchEvent(event);
+  return event;
+}
+
+function nodeRow(path: string): HTMLElement {
+  const el = row(path).querySelector(".nestnote-row");
+  if (!(el instanceof HTMLElement)) {
+    throw new Error(`missing row ${path}`);
+  }
+  return el;
 }
 
 afterEach(async () => {
@@ -455,5 +494,66 @@ describe("DocumentTreeView", () => {
     expect(toolbar(t("ui.expandAll"))).toBeTruthy();
     action("Work", t("ui.expand")).click();
     expect(toolbar(t("ui.collapseAll"))).toBeTruthy();
+  });
+
+  it("moves a document when dropped on another row", async () => {
+    const moved = node("Inbox", "Work/Inbox");
+    const { documents, requestRefresh, view } = await mount({
+      documents: {
+        move: vi.fn().mockResolvedValue(moved),
+      },
+    });
+    (requestRefresh as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      view.render([node("Work", "Work", [moved])]);
+    });
+    dispatchDrag(nodeRow("Work"), "drop", "Inbox");
+    await flush();
+    expect(documents.move).toHaveBeenCalledWith("Inbox", "Work");
+    expect(requestRefresh).toHaveBeenCalled();
+    expect(row("Work/Inbox").classList.contains("is-selected")).toBe(true);
+    expect(row("Work").classList.contains("is-expanded")).toBe(true);
+  });
+
+  it("stores the source path on dragstart from a row, not from action buttons", async () => {
+    const { documents } = await mount();
+    const start = dispatchDrag(nodeRow("Inbox"), "dragstart");
+    expect(start.dataTransfer?.getData(NESTNOTE_DOCUMENT_DRAG_MIME)).toBe("Inbox");
+    const blocked = dispatchDrag(
+      action("Work", t("command.newChildDocument")),
+      "dragstart",
+    );
+    expect(blocked.defaultPrevented).toBe(true);
+    expect(documents.move).not.toHaveBeenCalled();
+  });
+
+  it("moves a document to the vault root when dropped on empty tree space", async () => {
+    const moved = node("Notes", "Notes");
+    const { documents, view, requestRefresh } = await mount({
+      documents: { move: vi.fn().mockResolvedValue(moved) },
+    });
+    (requestRefresh as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      view.render([node("Work", "Work"), moved, node("Inbox", "Inbox")]);
+    });
+    const tree = view.contentEl.querySelector(".nestnote-tree");
+    if (!(tree instanceof HTMLElement)) {
+      throw new Error("tree missing");
+    }
+    dispatchDrag(tree, "drop", "Work/Notes");
+    await flush();
+    expect(documents.move).toHaveBeenCalledWith("Work/Notes", null);
+  });
+
+  it("keeps the tree and notifies when move rejects", async () => {
+    const { documents, requestRefresh, notice } = await mount({
+      documents: {
+        move: vi.fn().mockRejectedValue(new Error("blocked")),
+      },
+    });
+    dispatchDrag(nodeRow("Work"), "drop", "Inbox");
+    await flush();
+    expect(documents.move).toHaveBeenCalledWith("Inbox", "Work");
+    expect(requestRefresh).not.toHaveBeenCalled();
+    expect(notice).toHaveBeenCalled();
+    expect(row("Inbox")).toBeTruthy();
   });
 });
