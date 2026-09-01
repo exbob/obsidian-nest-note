@@ -223,6 +223,33 @@ class FakeWorkspace {
   readonly leftSidebarLeaves: FakeLeaf[] = [];
   opened: string[] = [];
   lastNewLeaf: boolean | undefined;
+  private readonly listeners = new Map<
+    string,
+    Array<{ callback: (...args: unknown[]) => unknown; ref: EventRef }>
+  >();
+
+  on(name: string, callback: (...args: unknown[]) => unknown): EventRef {
+    const ref: EventRef = { event: name };
+    const list = this.listeners.get(name) ?? [];
+    list.push({ callback, ref });
+    this.listeners.set(name, list);
+    return ref;
+  }
+
+  offref(ref: EventRef): void {
+    for (const [name, list] of this.listeners) {
+      this.listeners.set(
+        name,
+        list.filter((entry) => entry.ref !== ref),
+      );
+    }
+  }
+
+  emit(name: string, ...args: unknown[]): void {
+    for (const entry of this.listeners.get(name) ?? []) {
+      void entry.callback(...args);
+    }
+  }
 
   onLayoutReady(callback: () => unknown): void {
     if (this.layoutReady) {
@@ -1112,6 +1139,87 @@ created: 2020-01-01T00:00:00Z
       '.nestnote-node[data-path="Journal"].is-selected',
     );
     expect(selected).not.toBeNull();
+  });
+
+  it("expands the NestNote pane to a child document opened from the editor", async () => {
+    vi.useFakeTimers();
+    const app = createApp((vault) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+      seedDocument(
+        vault,
+        "Work/Notes",
+        `---
+name: Notes
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+    });
+    const plugin = loadPlugin(app);
+    await plugin.onload();
+    app.workspace.markReady();
+    await settle();
+    await plugin.activateView();
+
+    expect(document.querySelector('[data-path="Work"]')?.classList.contains("is-expanded")).toBe(
+      false,
+    );
+
+    app.workspace.emit("file-open", fileRef("Work/Notes/index.md"));
+
+    expect(
+      document.querySelector('[data-path="Work"]')?.classList.contains("is-expanded"),
+    ).toBe(true);
+    expect(
+      document.querySelector('.nestnote-node[data-path="Work/Notes"].is-selected'),
+    ).not.toBeNull();
+  });
+
+  it("does not change the NestNote pane when a non-document file is opened", async () => {
+    vi.useFakeTimers();
+    const app = createApp((vault) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+      seedDocument(
+        vault,
+        "Work/Notes",
+        `---
+name: Notes
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+      vault.files.set("Inbox.md", "# inbox\n");
+    });
+    const plugin = loadPlugin(app);
+    await plugin.onload();
+    app.workspace.markReady();
+    await settle();
+    await plugin.activateView();
+
+    app.workspace.emit("file-open", fileRef("Inbox.md"));
+
+    expect(
+      document.querySelector('[data-path="Work"]')?.classList.contains("is-expanded"),
+    ).toBe(false);
+    expect(
+      document.querySelector(".nestnote-node.is-selected"),
+    ).toBeNull();
   });
 
   it("does not create a child document unless the active file is the document index.md", async () => {

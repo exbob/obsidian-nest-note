@@ -200,6 +200,19 @@ export class DocumentTreeView extends ItemView {
       iconButton("ellipsis-vertical", t("ui.more"), (event) => {
         event.stopPropagation();
         const menu = new Menu();
+        const subtreePaths = this.expandablePaths([node]);
+        if (subtreePaths.length > 0) {
+          const allExpanded = subtreePaths.every((path) =>
+            this.expanded.has(path),
+          );
+          menu.addItem((item) => {
+            item.setTitle(allExpanded ? t("ui.collapseAll") : t("ui.expandAll"));
+            item.setIcon(allExpanded ? "chevrons-down-up" : "chevrons-up-down");
+            item.onClick(() => {
+              this.toggleExpandedPaths(subtreePaths);
+            });
+          });
+        }
         menu.addItem((item) => {
           item.setTitle(t("ui.rename"));
           item.setIcon("pencil");
@@ -249,7 +262,10 @@ export class DocumentTreeView extends ItemView {
   }
 
   private toggleAllExpanded(): void {
-    const paths = this.expandablePaths(this.nodes);
+    this.toggleExpandedPaths(this.expandablePaths(this.nodes));
+  }
+
+  private toggleExpandedPaths(paths: readonly string[]): void {
     if (paths.length === 0) {
       return;
     }
@@ -296,6 +312,10 @@ export class DocumentTreeView extends ItemView {
       this.expanded.add(ancestor);
     }
     this.render(this.nodes);
+    const selected = this.treeEl?.querySelector(".nestnote-node.is-selected");
+    if (selected instanceof HTMLElement) {
+      selected.scrollIntoView({ block: "nearest" });
+    }
   }
 
   private clearDropHighlights(): void {

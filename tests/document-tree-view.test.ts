@@ -337,6 +337,48 @@ describe("DocumentTreeView", () => {
     expect(documents.trash).toHaveBeenCalledWith("Work");
   });
 
+  it("expands every descendant from the more menu without touching other roots", async () => {
+    const nestedTree = [
+      node("Work", "Work", [
+        node("Notes", "Work/Notes", [node("Draft", "Work/Notes/Draft")]),
+      ]),
+      node("Archive", "Archive", [node("Old", "Archive/Old")]),
+    ];
+    await mount({ nodes: nestedTree });
+    menuItem("Work", t("ui.expandAll")).click();
+    expect(row("Work").classList.contains("is-expanded")).toBe(true);
+    expect(row("Work/Notes").classList.contains("is-expanded")).toBe(true);
+    expect(row("Archive").classList.contains("is-expanded")).toBe(false);
+  });
+
+  it("collapses the whole subtree from the more menu after it is fully expanded", async () => {
+    const nestedTree = [
+      node("Work", "Work", [
+        node("Notes", "Work/Notes", [node("Draft", "Work/Notes/Draft")]),
+      ]),
+    ];
+    await mount({ nodes: nestedTree });
+    menuItem("Work", t("ui.expandAll")).click();
+    menuItem("Work", t("ui.collapseAll")).click();
+    expect(row("Work").classList.contains("is-expanded")).toBe(false);
+    expect(row("Work/Notes").classList.contains("is-expanded")).toBe(false);
+    expect(toolbar(t("ui.expandAll"))).toBeTruthy();
+  });
+
+  it("omits expand and collapse from the more menu when a document has no children", async () => {
+    await mount();
+    action("Inbox", t("ui.more")).click();
+    expect(
+      document.querySelector(`.menu [aria-label="${t("ui.expandAll")}"]`),
+    ).toBeNull();
+    expect(
+      document.querySelector(`.menu [aria-label="${t("ui.collapseAll")}"]`),
+    ).toBeNull();
+    expect(
+      document.querySelector(`.menu [aria-label="${t("ui.rename")}"]`),
+    ).toBeInstanceOf(HTMLButtonElement);
+  });
+
   it("keeps expand and selection after a refresh when nodes still exist", async () => {
     const { view } = await mount();
     action("Work", t("ui.expand")).click();
@@ -384,11 +426,14 @@ describe("DocumentTreeView", () => {
     expect(action("Work", t("ui.more")).dataset.icon).toBe("ellipsis-vertical");
     expect(action("Work", t("ui.expand")).dataset.icon).toBeTruthy();
     action("Work", t("ui.more")).click();
-    for (const label of [t("ui.rename"), t("ui.delete")]) {
+    for (const label of [t("ui.expandAll"), t("ui.rename"), t("ui.delete")]) {
       const item = document.querySelector(`.menu [aria-label="${label}"]`);
       expect(item).toBeInstanceOf(HTMLButtonElement);
       expect((item as HTMLElement).dataset.icon).toBeTruthy();
     }
+    expect(
+      document.querySelector(`.menu [aria-label="${t("ui.expandAll")}"]`),
+    ).toMatchObject({ dataset: { icon: "chevrons-up-down" } });
   });
 
   it("requests a refresh from the toolbar without changing local tree state", async () => {

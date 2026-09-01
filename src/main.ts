@@ -172,6 +172,11 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
     });
 
     this.coordinator.start();
+    this.registerEvent(
+      this.app.workspace.on("file-open", (file) => {
+        this.revealOpenedDocument(file);
+      }),
+    );
     this.register(() => {
       this.stopped = true;
       this.coordinator.stop();
@@ -264,6 +269,14 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
         view.reveal(path);
       }
     }
+  }
+
+  private revealOpenedDocument(file: { path: string } | null): void {
+    const path = resolveActiveIndexDocument(this.app, file?.path ?? null);
+    if (path === null) {
+      return;
+    }
+    this.revealInOpenViews(path);
   }
 
   private async archiveCurrentAttachment(): Promise<void> {

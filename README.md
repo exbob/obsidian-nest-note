@@ -30,7 +30,7 @@ You can also bind these commands under **Settings → Hotkeys**.
 
 When the vault has no NestNote documents yet, use **New document** in the sidebar toolbar (or the command **NestNote: New document**). It always creates at the vault root and ignores which sidebar row is selected. Enter a valid name in the dialog, then press **Enter** or confirm.
 
-After the document is created, NestNote opens its `index.md` and selects it in the sidebar (expanding ancestors when needed).
+After the document is created, NestNote opens its `index.md` and selects it in the sidebar (expanding ancestors when needed). Opening any NestNote document the same way — including clicking a child-document link inside an index — also expands the sidebar to that document.
 
 Existing ordinary Markdown notes are not converted into NestNote documents, and the plugin does not complete directories that are missing `index.md` or `attachments/`. Create them with the plugin, or build the folders yourself using the convention below and then refresh.
 
@@ -43,6 +43,7 @@ Existing ordinary Markdown notes are not converted into NestNote documents, and 
 | New child document | The button on that row; creates under that document |
 | Reparent | Drag a document onto another document to nest it, or onto empty space in the tree to make it a root document. Sibling order stays alphabetical |
 | Rename | Row **More** → Rename |
+| Expand all / Collapse all children | Row **More** → **Expand all** or **Collapse all**. Toggles every nested child under that document. Hidden when the document has no children |
 | Delete | Row **More** → Delete; **every delete asks for confirmation** |
 | Expand all / Collapse all | Toolbar button. If any expandable node is still collapsed, the label is **Expand all**; after everything is expanded it becomes **Collapse all**. Disabled when nothing can be expanded. This only changes expansion state and does not rescan files |
 | Refresh | Toolbar button, or the command **NestNote: Refresh**. The whole tree also refreshes automatically after vault file changes |
