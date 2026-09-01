@@ -30,7 +30,7 @@ You can also bind these commands under **Settings → Hotkeys**.
 
 When the vault has no NestNote documents yet, use **New document** in the sidebar toolbar (or the command **NestNote: New document**). It always creates at the vault root and ignores which sidebar row is selected. Enter a valid name in the dialog, then press **Enter** or confirm.
 
-After the document is created, NestNote opens its `index.md` and selects it in the sidebar (expanding ancestors when needed). Opening any NestNote document the same way — including clicking a child-document link inside an index — also expands the sidebar to that document.
+After the document is created, NestNote opens its `index.md` and selects it in the sidebar (expanding ancestors when needed). Opening any NestNote document the same way — including clicking a child-document link inside an index, or restoring the last open document on startup — also expands the sidebar to that document.
 
 Existing ordinary Markdown notes are not converted into NestNote documents, and the plugin does not complete directories that are missing `index.md` or `attachments/`. Create them with the plugin, or build the folders yourself using the convention below and then refresh.
 

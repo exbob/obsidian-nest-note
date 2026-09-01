@@ -204,6 +204,7 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
         new Notice(errorMessage(error));
       }
     }
+    this.revealActiveDocument();
   }
 
   private openDocumentTree(): void {
@@ -222,6 +223,7 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
       await leaf.setViewState({ type: VIEW_TYPE_NESTNOTE, active: true });
     }
     await revealLeaf(this.app.workspace, leaf);
+    this.revealActiveDocument();
   }
 
   private async handleCreatedFile(file: CoordinatorFileRef): Promise<void> {
@@ -277,6 +279,10 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
       return;
     }
     this.revealInOpenViews(path);
+  }
+
+  private revealActiveDocument(): void {
+    this.revealOpenedDocument(this.app.workspace.getActiveFile());
   }
 
   private async archiveCurrentAttachment(): Promise<void> {

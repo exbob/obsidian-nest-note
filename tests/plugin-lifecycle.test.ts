@@ -1183,6 +1183,80 @@ created: 2020-01-01T00:00:00Z
     ).not.toBeNull();
   });
 
+  it("reveals the restored active document after layout is ready", async () => {
+    vi.useFakeTimers();
+    const app = createApp((vault, workspace) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+      seedDocument(
+        vault,
+        "Work/Notes",
+        `---
+name: Notes
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+      workspace.activeFile = fileRef("Work/Notes/index.md");
+    });
+    const plugin = loadPlugin(app);
+    await plugin.onload();
+    app.workspace.emit("file-open", fileRef("Work/Notes/index.md"));
+    app.workspace.markReady();
+    await settle();
+
+    expect(
+      document.querySelector('[data-path="Work"]')?.classList.contains("is-expanded"),
+    ).toBe(true);
+    expect(
+      document.querySelector('.nestnote-node[data-path="Work/Notes"].is-selected'),
+    ).not.toBeNull();
+  });
+
+  it("reveals the active document when the NestNote pane opens later", async () => {
+    vi.useFakeTimers();
+    const app = createApp((vault, workspace) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+      seedDocument(
+        vault,
+        "Work/Notes",
+        `---
+name: Notes
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+      workspace.activeFile = fileRef("Work/Notes/index.md");
+    });
+    const plugin = loadPlugin(app, { openPanelOnStartup: false });
+    await plugin.onload();
+    app.workspace.markReady();
+    await settle();
+    await plugin.activateView();
+
+    expect(
+      document.querySelector('[data-path="Work"]')?.classList.contains("is-expanded"),
+    ).toBe(true);
+    expect(
+      document.querySelector('.nestnote-node[data-path="Work/Notes"].is-selected'),
+    ).not.toBeNull();
+  });
+
   it("does not change the NestNote pane when a non-document file is opened", async () => {
     vi.useFakeTimers();
     const app = createApp((vault) => {
