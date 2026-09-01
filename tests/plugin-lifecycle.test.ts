@@ -866,6 +866,66 @@ created: 2020-01-01T00:00:00Z
     );
   });
 
+  it("does not rewrite index files on scan when auto-fix is disabled", async () => {
+    vi.useFakeTimers();
+    const original = `---
+created: 2020-01-01T00:00:00Z
+---
+# Body
+<!-- nestnote:children:start -->
+<!-- nestnote:children:end -->
+`;
+    const app = createApp((vault) => {
+      seedDocument(vault, "Work", original);
+    });
+    const plugin = loadPlugin(app, { autoFixDocumentFormat: false });
+    await plugin.onload();
+    app.workspace.markReady();
+    await settle();
+
+    expect(app.vault.files.get("Work/index.md")).toBe(original);
+    command(plugin, "nestnote:refresh")();
+    await settle();
+    expect(app.vault.files.get("Work/index.md")).toBe(original);
+  });
+
+  it("still updates parent child links when auto-fix is disabled", async () => {
+    vi.useFakeTimers();
+    const app = createApp((vault, workspace) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+# Body
+<!-- nestnote:children:start -->
+<!-- nestnote:children:end -->
+`,
+      );
+      workspace.activeFile = fileRef("Work/index.md");
+    });
+    const plugin = loadPlugin(app, { autoFixDocumentFormat: false });
+    await plugin.onload();
+    app.workspace.markReady();
+    await settle();
+
+    expect(app.vault.files.get("Work/index.md")).toContain(
+      "<!-- nestnote:children:start -->\n<!-- nestnote:children:end -->",
+    );
+
+    command(plugin, "nestnote:new-child-document")();
+    await confirmNameModal("Notes");
+    await settle();
+
+    expect(app.vault.folders.has("Work/Notes")).toBe(true);
+    expect(app.vault.files.get("Work/index.md")).toContain(
+      "- [Notes](Notes/index.md)",
+    );
+    expect(app.vault.files.get("Work/index.md")).toContain("# Body");
+  });
+
   it("fills missing created with a timezone-offset ISO timestamp", async () => {
     vi.useFakeTimers();
     const app = createApp((vault) => {

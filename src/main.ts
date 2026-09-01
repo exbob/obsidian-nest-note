@@ -339,7 +339,9 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
       await this.coordinator.runInternal(async () => {
         const metadataNodes = scanFromApp(this.app, 9);
         this.nodes = scanFromApp(this.app, this.settings.maxChildDepth);
-        await syncDocumentMetadata(this.app, metadataNodes);
+        if (this.settings.autoFixDocumentFormat) {
+          await syncDocumentMetadata(this.app, metadataNodes);
+        }
       });
       this.renderOpenViews();
     } catch (error) {
