@@ -17,6 +17,7 @@ describe("normalizeNestNoteSettings", () => {
     expect(normalizeNestNoteSettings(undefined)).toEqual({
       maxChildDepth: 5,
       openPanelOnStartup: true,
+      autoFixDocumentFormat: true,
     });
   });
 
@@ -25,10 +26,12 @@ describe("normalizeNestNoteSettings", () => {
       normalizeNestNoteSettings({
         maxChildDepth: 9,
         openPanelOnStartup: false,
+        autoFixDocumentFormat: false,
       }),
     ).toEqual({
       maxChildDepth: 9,
       openPanelOnStartup: false,
+      autoFixDocumentFormat: false,
     });
   });
 
@@ -37,6 +40,7 @@ describe("normalizeNestNoteSettings", () => {
       normalizeNestNoteSettings({
         maxChildDepth: 10,
         openPanelOnStartup: "yes",
+        autoFixDocumentFormat: "yes",
       }),
     ).toEqual(DEFAULT_NESTNOTE_SETTINGS);
   });
@@ -45,6 +49,20 @@ describe("normalizeNestNoteSettings", () => {
     expect(normalizeNestNoteSettings({ maxChildDepth: 0 })).toEqual({
       maxChildDepth: 0,
       openPanelOnStartup: true,
+      autoFixDocumentFormat: true,
+    });
+  });
+
+  it("defaults auto-fix to true when the field is missing", () => {
+    expect(
+      normalizeNestNoteSettings({
+        maxChildDepth: 3,
+        openPanelOnStartup: false,
+      }),
+    ).toEqual({
+      maxChildDepth: 3,
+      openPanelOnStartup: false,
+      autoFixDocumentFormat: true,
     });
   });
 });
@@ -96,12 +114,21 @@ function depthInput(tab: NestNoteSettingTab): HTMLInputElement {
   return input;
 }
 
-function startupToggle(tab: NestNoteSettingTab): HTMLElement {
-  const toggle = tab.containerEl.querySelector('[role="switch"]');
+function switchAt(tab: NestNoteSettingTab, index: number): HTMLElement {
+  const toggles = tab.containerEl.querySelectorAll('[role="switch"]');
+  const toggle = toggles[index];
   if (!(toggle instanceof HTMLElement)) {
-    throw new Error("missing startup panel toggle");
+    throw new Error(`missing settings toggle at ${index}`);
   }
   return toggle;
+}
+
+function startupToggle(tab: NestNoteSettingTab): HTMLElement {
+  return switchAt(tab, 0);
+}
+
+function autoFixToggle(tab: NestNoteSettingTab): HTMLElement {
+  return switchAt(tab, 1);
 }
 
 afterEach(() => {
@@ -110,13 +137,15 @@ afterEach(() => {
 });
 
 describe("NestNoteSettingTab", () => {
-  it("renders the depth and startup settings", () => {
+  it("renders depth, startup, and auto-fix settings", () => {
     const { tab } = mountTab({ maxChildDepth: 3, openPanelOnStartup: false });
     const text = tab.containerEl.textContent ?? "";
     expect(text).toContain(t("setting.maxChildDepthName"));
     expect(text).toContain(t("setting.maxChildDepthDesc"));
     expect(text).toContain(t("setting.openPanelOnStartupName"));
     expect(text).toContain(t("setting.openPanelOnStartupDesc"));
+    expect(text).toContain(t("setting.autoFixDocumentFormatName"));
+    expect(text).toContain(t("setting.autoFixDocumentFormatDesc"));
 
     const input = depthInput(tab);
     expect(input.min).toBe("0");
@@ -124,6 +153,7 @@ describe("NestNoteSettingTab", () => {
     expect(input.step).toBe("1");
     expect(input.value).toBe("3");
     expect(startupToggle(tab).getAttribute("aria-checked")).toBe("false");
+    expect(autoFixToggle(tab).getAttribute("aria-checked")).toBe("true");
   });
 
   it("saves a valid depth change and notifies the host", async () => {
@@ -166,6 +196,16 @@ describe("NestNoteSettingTab", () => {
     expect(host.onSettingsChanged).toHaveBeenCalledTimes(1);
   });
 
+  it("saves auto-fix toggle changes and notifies the host", async () => {
+    const { tab, host } = mountTab({ autoFixDocumentFormat: true });
+    autoFixToggle(tab).click();
+    await Promise.resolve();
+
+    expect(host.settings.autoFixDocumentFormat).toBe(false);
+    expect(host.saveSettings).toHaveBeenCalledTimes(1);
+    expect(host.onSettingsChanged).toHaveBeenCalledTimes(1);
+  });
+
   it("rolls back depth and shows a Notice when saveSettings fails", async () => {
     const { tab, host } = mountTab({ maxChildDepth: 5 });
     host.saveSettings.mockRejectedValueOnce(new Error("persist failed"));
@@ -191,6 +231,20 @@ describe("NestNoteSettingTab", () => {
 
     expect(host.settings.openPanelOnStartup).toBe(true);
     expect(startupToggle(tab).getAttribute("aria-checked")).toBe("true");
+    expect(host.saveSettings).toHaveBeenCalledTimes(1);
+    expect(host.onSettingsChanged).not.toHaveBeenCalled();
+    expect(noticeHarness().messages.length).toBeGreaterThan(0);
+  });
+
+  it("rolls back the auto-fix toggle and shows a Notice when saveSettings fails", async () => {
+    const { tab, host } = mountTab({ autoFixDocumentFormat: true });
+    host.saveSettings.mockRejectedValueOnce(new Error("persist failed"));
+    autoFixToggle(tab).click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(host.settings.autoFixDocumentFormat).toBe(true);
+    expect(autoFixToggle(tab).getAttribute("aria-checked")).toBe("true");
     expect(host.saveSettings).toHaveBeenCalledTimes(1);
     expect(host.onSettingsChanged).not.toHaveBeenCalled();
     expect(noticeHarness().messages.length).toBeGreaterThan(0);

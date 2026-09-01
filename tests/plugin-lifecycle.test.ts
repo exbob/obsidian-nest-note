@@ -650,6 +650,7 @@ describe("NestNotePlugin assembly", () => {
     expect(harness(plugin).persistedData).toEqual({
       maxChildDepth: 2,
       openPanelOnStartup: false,
+      autoFixDocumentFormat: true,
     });
   });
 

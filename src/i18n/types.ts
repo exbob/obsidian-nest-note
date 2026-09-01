@@ -8,6 +8,8 @@ export const MESSAGE_KEYS = [
   "setting.maxChildDepthDesc",
   "setting.openPanelOnStartupName",
   "setting.openPanelOnStartupDesc",
+  "setting.autoFixDocumentFormatName",
+  "setting.autoFixDocumentFormatDesc",
   "setting.maxChildDepthInvalid",
   "setting.saveFailed",
   "ui.expandAll",

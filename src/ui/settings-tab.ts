@@ -10,7 +10,7 @@ export interface NestNoteSettingsHost {
 }
 
 type DepthSlider = { setValue(value: number): unknown };
-type StartupToggle = { setValue(on: boolean): unknown };
+type BooleanToggle = { setValue(on: boolean): unknown };
 
 export class NestNoteSettingTab extends PluginSettingTab {
   private readonly host: NestNoteSettingsHost;
@@ -47,6 +47,18 @@ export class NestNoteSettingTab extends PluginSettingTab {
           });
         });
       });
+
+    new Setting(this.containerEl)
+      .setName(t("setting.autoFixDocumentFormatName"))
+      .setDesc(t("setting.autoFixDocumentFormatDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.host.settings.autoFixDocumentFormat);
+        toggle.onChange((value) => {
+          this.commitAutoFixDocumentFormat(toggle, value).catch((error) => {
+            this.noticeSaveFailure(error);
+          });
+        });
+      });
   }
 
   private async commitMaxChildDepth(
@@ -72,7 +84,7 @@ export class NestNoteSettingTab extends PluginSettingTab {
   }
 
   private async commitOpenPanelOnStartup(
-    toggle: StartupToggle,
+    toggle: BooleanToggle,
     value: boolean,
   ): Promise<void> {
     const previous = this.host.settings.openPanelOnStartup;
@@ -81,6 +93,23 @@ export class NestNoteSettingTab extends PluginSettingTab {
       await this.host.saveSettings();
     } catch (error) {
       this.host.settings.openPanelOnStartup = previous;
+      toggle.setValue(previous);
+      this.noticeSaveFailure(error);
+      return;
+    }
+    this.host.onSettingsChanged();
+  }
+
+  private async commitAutoFixDocumentFormat(
+    toggle: BooleanToggle,
+    value: boolean,
+  ): Promise<void> {
+    const previous = this.host.settings.autoFixDocumentFormat;
+    this.host.settings.autoFixDocumentFormat = value;
+    try {
+      await this.host.saveSettings();
+    } catch (error) {
+      this.host.settings.autoFixDocumentFormat = previous;
       toggle.setValue(previous);
       this.noticeSaveFailure(error);
       return;

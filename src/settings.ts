@@ -1,11 +1,13 @@
 export interface NestNoteSettings {
   maxChildDepth: number;
   openPanelOnStartup: boolean;
+  autoFixDocumentFormat: boolean;
 }
 
 export const DEFAULT_NESTNOTE_SETTINGS: NestNoteSettings = {
   maxChildDepth: 5,
   openPanelOnStartup: true,
+  autoFixDocumentFormat: true,
 };
 
 export function normalizeNestNoteSettings(value: unknown): NestNoteSettings {
@@ -24,5 +26,9 @@ export function normalizeNestNoteSettings(value: unknown): NestNoteSettings {
     typeof record.openPanelOnStartup === "boolean"
       ? record.openPanelOnStartup
       : DEFAULT_NESTNOTE_SETTINGS.openPanelOnStartup;
-  return { maxChildDepth, openPanelOnStartup };
+  const autoFixDocumentFormat =
+    typeof record.autoFixDocumentFormat === "boolean"
+      ? record.autoFixDocumentFormat
+      : DEFAULT_NESTNOTE_SETTINGS.autoFixDocumentFormat;
+  return { maxChildDepth, openPanelOnStartup, autoFixDocumentFormat };
 }

@@ -10,6 +10,9 @@ export const zh: Record<MessageKey, string> = {
   "setting.maxChildDepthDesc": "根文档为第 0 级，可设置 0～9",
   "setting.openPanelOnStartupName": "启动时打开 NestNote 面板",
   "setting.openPanelOnStartupDesc": "仅影响下次启动，不关闭当前面板",
+  "setting.autoFixDocumentFormatName": "自动修正文档格式",
+  "setting.autoFixDocumentFormatDesc":
+    "扫描时补全缺失的头部字段和子文档标记，并把子文档列表写成规范格式。关闭后，只有新建、删除、重命名、移动子文档时才会更新父文档链接。",
   "setting.maxChildDepthInvalid": "最大子文档层级必须是 0～9 的整数",
   "setting.saveFailed": "设置保存失败，已恢复为上次有效值：{detail}",
   "ui.expandAll": "全部展开",

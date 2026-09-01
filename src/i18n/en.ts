@@ -11,6 +11,9 @@ export const en: Record<MessageKey, string> = {
   "setting.openPanelOnStartupName": "Open the NestNote pane on startup",
   "setting.openPanelOnStartupDesc":
     "Applies on the next launch; does not close the current pane.",
+  "setting.autoFixDocumentFormatName": "Auto-fix document format",
+  "setting.autoFixDocumentFormatDesc":
+    "During scans, fill missing header fields and child-link markers, and rewrite the child list to the canonical format. When off, parent links update only when you create, delete, rename, or move a child document.",
   "setting.maxChildDepthInvalid":
     "Max child document depth must be an integer from 0 to 9",
   "setting.saveFailed":
