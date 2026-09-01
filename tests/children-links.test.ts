@@ -32,7 +32,9 @@ name: Work
 created: 2026-08-28T19:00:00+08:00
 ---
 <!-- nestnote:children:start -->
+
 - [文档1](文档1/index.md)
+
 <!-- nestnote:children:end -->
 # Body
 `);
@@ -42,7 +44,9 @@ created: 2026-08-28T19:00:00+08:00
     const result = updateChildrenLinks("# Body\n", "Work", [child("文档1")]);
 
     expect(result).toBe(`<!-- nestnote:children:start -->
+
 - [文档1](文档1/index.md)
+
 <!-- nestnote:children:end -->
 # Body
 `);
@@ -62,6 +66,8 @@ name: Work
 created: 2026-08-28T19:00:00+08:00
 ---
 <!-- nestnote:children:start -->
+
+
 <!-- nestnote:children:end -->
 `);
   });
@@ -91,7 +97,9 @@ See [手工](other.md)
 \`\`\`
 
 <!-- nestnote:children:start -->
+
 - [文档1](文档1/index.md)
+
 <!-- nestnote:children:end -->
 
 # Outro
@@ -109,8 +117,10 @@ See [手工](other.md)
     );
 
     expect(result).toBe(`<!-- nestnote:children:start -->
+
 - [文档1](文档1/index.md)
 - [文档2](文档2/index.md)
+
 <!-- nestnote:children:end -->
 `);
   });
@@ -165,7 +175,9 @@ name: Work
 created: 2026-08-28T19:00:00+08:00
 ---
 <!-- nestnote:children:start -->
+
 - [文档1](文档1/index.md)
+
 <!-- nestnote:children:end -->
 # Intro
 
@@ -200,7 +212,9 @@ created: 2026-08-28T19:00:00+08:00
 \`\`\`
 
 <!-- nestnote:children:start -->
+
 - [文档1](文档1/index.md)
+
 <!-- nestnote:children:end -->
 `);
   });
@@ -224,7 +238,9 @@ created: 2026-08-28T19:00:00+08:00
         "created: 2026-08-28T19:00:00+08:00",
         "---",
         "<!-- nestnote:children:start -->",
+        "",
         "- [文档1](文档1/index.md)",
+        "",
         "<!-- nestnote:children:end -->",
         "# Body",
         "",
@@ -247,7 +263,9 @@ created: 2026-08-28T19:00:00+08:00
     expect(result).toBe(
       [
         "<!-- nestnote:children:start -->",
+        "",
         "- [文档1](文档1/index.md)",
+        "",
         "<!-- nestnote:children:end -->",
         "# Body",
         "",
@@ -280,7 +298,9 @@ created: 2026-08-28T19:00:00+08:00
 
     expect(result).toBe(
       `${bom}<!-- nestnote:children:start -->
+
 - [文档1](文档1/index.md)
+
 <!-- nestnote:children:end -->
 # Body
 `,
@@ -307,6 +327,36 @@ created: 2026-08-28T19:00:00+08:00
       expect(error).toBeInstanceOf(ChildrenLinksError);
       expect((error as Error).name).toBe("ChildrenLinksError");
     }
+  });
+
+  it("inserts a new child link between the two blank lines of an empty region", () => {
+    const result = updateChildrenLinks(
+      "<!-- nestnote:children:start -->\n\n\n<!-- nestnote:children:end -->\n",
+      "Work",
+      [child("文档1")],
+    );
+
+    expect(result).toBe(`<!-- nestnote:children:start -->
+
+- [文档1](文档1/index.md)
+
+<!-- nestnote:children:end -->
+`);
+  });
+
+  it("parses adjacent markers with no blank lines and still rewrites with spacing", () => {
+    const result = updateChildrenLinks(
+      "<!-- nestnote:children:start -->\n<!-- nestnote:children:end -->\n",
+      "Work",
+      [child("文档1")],
+    );
+
+    expect(result).toBe(`<!-- nestnote:children:start -->
+
+- [文档1](文档1/index.md)
+
+<!-- nestnote:children:end -->
+`);
   });
 
   it("escapes square brackets in children link labels", () => {

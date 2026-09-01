@@ -270,6 +270,8 @@ created: ${created}
 ## ${childrenHeading}
 
 <!-- nestnote:children:start -->
+
+
 <!-- nestnote:children:end -->
 `;
 }
@@ -768,6 +770,8 @@ name: Work
 created: 2020-01-01T00:00:00Z
 ---
 <!-- nestnote:children:start -->
+
+
 <!-- nestnote:children:end -->
 # Body
 `);

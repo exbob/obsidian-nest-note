@@ -150,6 +150,8 @@ created: 2026-08-28T19:00:00+08:00
 ## Child Document
 
 <!-- nestnote:children:start -->
+
+
 <!-- nestnote:children:end -->
 ```
 
@@ -170,14 +172,16 @@ A parent’s `index.md` contains a plugin-maintained list. On create, it is plac
 ## Child Document
 
 <!-- nestnote:children:start -->
+
 - [项目 A](项目%20A/index.md)
 - [项目 B](项目%20B/index.md)
+
 <!-- nestnote:children:end -->
 
 This is your own body text. The plugin does not change content outside these markers.
 ```
 
-Creating, deleting, or renaming a child updates only the list between the two markers, sorted by document name. Links are ordinary relative paths; spaces in names are written as `%20`. Hand-written links in the body are not scanned, deleted, or rewritten. If the markers are missing, the plugin creates a region after the header.
+Creating, deleting, or renaming a child updates only the list between the two markers, sorted by document name. There is one blank line between the list and each marker; missing blank lines do not affect parsing. Links are ordinary relative paths; spaces in names are written as `%20`. Hand-written links in the body are not scanned, deleted, or rewritten. If the markers are missing, the plugin creates a region after the header.
 
 ### Attachments
 

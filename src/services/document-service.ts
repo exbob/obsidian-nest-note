@@ -627,6 +627,8 @@ function initialIndexBody(name: string): string {
     `## ${t("ui.childrenHeading")}`,
     "",
     "<!-- nestnote:children:start -->",
+    "",
+    "",
     "<!-- nestnote:children:end -->",
     "",
   ].join("\n");

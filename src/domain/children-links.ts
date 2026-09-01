@@ -36,13 +36,11 @@ function renderChildrenRegion(
   newline: "\n" | "\r\n",
 ): string {
   const sorted = [...children].sort((a, b) => a.name.localeCompare(b.name));
-  const lines = [CHILDREN_START];
-  for (const child of sorted) {
+  const links = sorted.map((child) => {
     const relative = relativeChildIndex(parentPath, child);
-    lines.push(`- [${escapeLinkLabel(child.name)}](${encodeLinkPath(relative)})`);
-  }
-  lines.push(CHILDREN_END);
-  return lines.join(newline);
+    return `- [${escapeLinkLabel(child.name)}](${encodeLinkPath(relative)})`;
+  });
+  return [CHILDREN_START, "", ...links, "", CHILDREN_END].join(newline);
 }
 
 function replaceControlledRegion(
