@@ -597,6 +597,43 @@ describe("NestNoteDocumentService.create", () => {
     expect(app.vault.files.has("Archive/Work/Child/index.md")).toBe(true);
   });
 
+  it("appends a new child after the existing custom child-link order", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+# Body
+<!-- nestnote:children:start -->
+
+- [B](B/index.md)
+- [A](A/index.md)
+
+<!-- nestnote:children:end -->
+`,
+      );
+      seedDocument(vault, "Work/B", parentIndex("B"));
+      seedDocument(vault, "Work/A", parentIndex("A"));
+    });
+
+    await service.create("Work", "C");
+
+    const parent = app.vault.files.get("Work/index.md") ?? "";
+    const start = parent.indexOf("<!-- nestnote:children:start -->");
+    const end = parent.indexOf("<!-- nestnote:children:end -->");
+    const region = parent.slice(start, end);
+    expect(region.indexOf("- [B](B/index.md)")).toBeLessThan(
+      region.indexOf("- [A](A/index.md)"),
+    );
+    expect(region.indexOf("- [A](A/index.md)")).toBeLessThan(
+      region.indexOf("- [C](C/index.md)"),
+    );
+    expect(parent).toContain("# Body");
+  });
+
   it("rejects a grandchild beyond one level under a regular-folder root without writing", async () => {
     const app = createApp((vault) => {
       vault.folders.add("Archive");
@@ -696,6 +733,38 @@ created: 2026-08-28T19:00:00+08:00
     expect(app.vault.renameCalls).toEqual([]);
     expect(app.vault.files.get("Work/index.md")).toBe(original);
     expect(notices.length).toBeGreaterThan(0);
+  });
+
+  it("keeps a renamed child in the same list position", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+<!-- nestnote:children:start -->
+
+- [B](B/index.md)
+- [A](A/index.md)
+
+<!-- nestnote:children:end -->
+`,
+      );
+      seedDocument(vault, "Work/B", parentIndex("B"));
+      seedDocument(vault, "Work/A", parentIndex("A"));
+    });
+
+    await service.rename("Work/A", "Alpha");
+
+    const parent = app.vault.files.get("Work/index.md") ?? "";
+    expect(parent).toContain("- [B](B/index.md)");
+    expect(parent).toContain("- [Alpha](Alpha/index.md)");
+    expect(parent).not.toContain("- [A](A/index.md)");
+    expect(parent.indexOf("- [B](B/index.md)")).toBeLessThan(
+      parent.indexOf("- [Alpha](Alpha/index.md)"),
+    );
   });
 
   it("blocks rename when the target already exists, before calling the vault API", async () => {
@@ -916,6 +985,131 @@ created: 2020-01-01T00:00:00Z
     expect(app.vault.renameCalls).toEqual([]);
     expect(app.vault.getFolderByPath("Inbox")).not.toBeNull();
     expect(app.vault.files.get("Work/index.md")).toBe(original);
+  });
+
+  it("reorders siblings in the parent list without renaming", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+<!-- nestnote:children:start -->
+
+- [A](A/index.md)
+- [B](B/index.md)
+- [C](C/index.md)
+
+<!-- nestnote:children:end -->
+`,
+      );
+      seedDocument(vault, "Work/A", parentIndex("A"));
+      seedDocument(vault, "Work/B", parentIndex("B"));
+      seedDocument(vault, "Work/C", parentIndex("C"));
+    });
+
+    const node = await service.move("Work/C", "Work", "Work/A");
+
+    expect(node.path).toBe("Work/C");
+    expect(app.vault.renameCalls).toEqual([]);
+    const parent = app.vault.files.get("Work/index.md") ?? "";
+    expect(parent.indexOf("- [C](C/index.md)")).toBeLessThan(
+      parent.indexOf("- [A](A/index.md)"),
+    );
+    expect(parent.indexOf("- [A](A/index.md)")).toBeLessThan(
+      parent.indexOf("- [B](B/index.md)"),
+    );
+  });
+
+  it("does not write when the sibling is already in the requested position", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+<!-- nestnote:children:start -->
+
+- [A](A/index.md)
+- [B](B/index.md)
+
+<!-- nestnote:children:end -->
+`,
+      );
+      seedDocument(vault, "Work/A", parentIndex("A"));
+      seedDocument(vault, "Work/B", parentIndex("B"));
+    });
+    const before = app.vault.files.get("Work/index.md");
+    await service.move("Work/A", "Work", "Work/B");
+    await service.move("Work/B", "Work", "Work/B");
+    expect(app.vault.renameCalls).toEqual([]);
+    expect(app.vault.files.get("Work/index.md")).toBe(before);
+  });
+
+  it("inserts at the given sibling when moving to a new parent", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+<!-- nestnote:children:start -->
+
+- [Keep](Keep/index.md)
+
+<!-- nestnote:children:end -->
+`,
+      );
+      seedDocument(
+        vault,
+        "Office",
+        `---
+name: Office
+created: 2020-01-01T00:00:00Z
+---
+<!-- nestnote:children:start -->
+
+- [B](B/index.md)
+- [A](A/index.md)
+
+<!-- nestnote:children:end -->
+`,
+      );
+      seedDocument(vault, "Work/Keep", parentIndex("Keep"));
+      seedDocument(vault, "Office/B", parentIndex("B"));
+      seedDocument(vault, "Office/A", parentIndex("A"));
+    });
+
+    await service.move("Work/Keep", "Office", "Office/A");
+
+    expect(app.vault.renameCalls).toEqual([
+      { from: "Work/Keep", to: "Office/Keep" },
+    ]);
+    expect(app.vault.files.get("Work/index.md")).not.toContain("Keep");
+    const office = app.vault.files.get("Office/index.md") ?? "";
+    expect(office.indexOf("- [B](B/index.md)")).toBeLessThan(
+      office.indexOf("- [Keep](Keep/index.md)"),
+    );
+    expect(office.indexOf("- [Keep](Keep/index.md)")).toBeLessThan(
+      office.indexOf("- [A](A/index.md)"),
+    );
+  });
+
+  it("ignores insert position when moving to the vault root", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+      seedDocument(vault, "Inbox", parentIndex("Inbox"));
+      seedDocument(vault, "Work/Notes", parentIndex("Notes"));
+    });
+    const rooted = await service.move("Work/Notes", null, "Inbox");
+    expect(rooted.path).toBe("Notes");
+    expect(app.vault.getFolderByPath("Notes")).not.toBeNull();
   });
 });
 

@@ -150,6 +150,14 @@ button.nestnote-icon-button:disabled:hover {
   box-shadow: inset 0 0 0 1px var(--interactive-accent);
 }
 
+.nestnote-node.is-drop-before > .nestnote-row {
+  box-shadow: inset 0 2px 0 0 var(--interactive-accent);
+}
+
+.nestnote-node.is-drop-after > .nestnote-row {
+  box-shadow: inset 0 -2px 0 0 var(--interactive-accent);
+}
+
 .nestnote-tree.is-drop-root {
   box-shadow: inset 0 0 0 1px var(--interactive-accent);
 }

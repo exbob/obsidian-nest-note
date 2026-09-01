@@ -123,6 +123,7 @@ function dispatchDrag(
   target: EventTarget,
   type: string,
   path?: string,
+  clientY = 0,
 ): DragEvent {
   const data: Record<string, string> = {};
   if (path !== undefined && type !== "dragstart") {
@@ -142,11 +143,27 @@ function dispatchDrag(
     bubbles: true,
     cancelable: true,
   });
-  Object.defineProperty(event, "dataTransfer", {
-    value: dataTransfer,
-  });
+  Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+  Object.defineProperty(event, "clientY", { value: clientY });
   target.dispatchEvent(event);
   return event;
+}
+
+function stubRowRect(rowEl: HTMLElement, height = 40): void {
+  rowEl.getBoundingClientRect = () =>
+    ({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 100,
+      bottom: height,
+      width: 100,
+      height,
+      toJSON() {
+        return {};
+      },
+    }) as DOMRect;
 }
 
 function nodeRow(path: string): HTMLElement {
@@ -553,7 +570,7 @@ describe("DocumentTreeView", () => {
     });
     dispatchDrag(nodeRow("Work"), "drop", "Inbox");
     await flush();
-    expect(documents.move).toHaveBeenCalledWith("Inbox", "Work");
+    expect(documents.move).toHaveBeenCalledWith("Inbox", "Work", null);
     expect(requestRefresh).toHaveBeenCalled();
     expect(row("Work/Inbox").classList.contains("is-selected")).toBe(true);
     expect(row("Work").classList.contains("is-expanded")).toBe(true);
@@ -585,7 +602,7 @@ describe("DocumentTreeView", () => {
     }
     dispatchDrag(tree, "drop", "Work/Notes");
     await flush();
-    expect(documents.move).toHaveBeenCalledWith("Work/Notes", null);
+    expect(documents.move).toHaveBeenCalledWith("Work/Notes", null, null);
   });
 
   it("keeps the tree and notifies when move rejects", async () => {
@@ -596,9 +613,90 @@ describe("DocumentTreeView", () => {
     });
     dispatchDrag(nodeRow("Work"), "drop", "Inbox");
     await flush();
-    expect(documents.move).toHaveBeenCalledWith("Inbox", "Work");
+    expect(documents.move).toHaveBeenCalledWith("Inbox", "Work", null);
     expect(requestRefresh).not.toHaveBeenCalled();
     expect(notice).toHaveBeenCalled();
     expect(row("Inbox")).toBeTruthy();
+  });
+
+  const siblingTree: DocumentNode[] = [
+    node("Work", "Work", [
+      node("A", "Work/A"),
+      node("B", "Work/B"),
+      node("C", "Work/C"),
+    ]),
+  ];
+
+  it("inserts before a non-root row when dropped on the top quarter", async () => {
+    const moved = node("C", "Work/C");
+    const { documents } = await mount({
+      nodes: siblingTree,
+      documents: { move: vi.fn().mockResolvedValue(moved) },
+    });
+    const rowEl = nodeRow("Work/A");
+    stubRowRect(rowEl);
+    dispatchDrag(rowEl, "drop", "Work/C", 5);
+    await flush();
+    expect(documents.move).toHaveBeenCalledWith("Work/C", "Work", "Work/A");
+  });
+
+  it("inserts after a non-root row when dropped on the bottom quarter", async () => {
+    const moved = node("A", "Work/A");
+    const { documents } = await mount({
+      nodes: siblingTree,
+      documents: { move: vi.fn().mockResolvedValue(moved) },
+    });
+    const rowEl = nodeRow("Work/B");
+    stubRowRect(rowEl);
+    dispatchDrag(rowEl, "drop", "Work/A", 35);
+    await flush();
+    expect(documents.move).toHaveBeenCalledWith("Work/A", "Work", "Work/C");
+  });
+
+  it("nests into a non-root row when dropped on the middle", async () => {
+    const moved = node("C", "Work/B/C");
+    const { documents } = await mount({
+      nodes: siblingTree,
+      documents: { move: vi.fn().mockResolvedValue(moved) },
+    });
+    const rowEl = nodeRow("Work/B");
+    stubRowRect(rowEl);
+    dispatchDrag(rowEl, "drop", "Work/C", 20);
+    await flush();
+    expect(documents.move).toHaveBeenCalledWith("Work/C", "Work/B", null);
+  });
+
+  it("does not move when dropped on the source row before or after zones", async () => {
+    const { documents } = await mount({ nodes: siblingTree });
+    const rowEl = nodeRow("Work/B");
+    stubRowRect(rowEl);
+    dispatchDrag(rowEl, "drop", "Work/B", 5);
+    dispatchDrag(rowEl, "drop", "Work/B", 35);
+    await flush();
+    expect(documents.move).not.toHaveBeenCalled();
+  });
+
+  it("treats a root row as nest-only even on the top quarter", async () => {
+    const moved = node("Inbox", "Work/Inbox");
+    const { documents } = await mount({
+      documents: { move: vi.fn().mockResolvedValue(moved) },
+    });
+    const rowEl = nodeRow("Work");
+    stubRowRect(rowEl);
+    dispatchDrag(rowEl, "drop", "Inbox", 5);
+    await flush();
+    expect(documents.move).toHaveBeenCalledWith("Inbox", "Work", null);
+  });
+
+  it("skips the source when resolving the next sibling for an after-drop", async () => {
+    const { documents } = await mount({
+      nodes: siblingTree,
+      documents: { move: vi.fn().mockResolvedValue(node("B", "Work/B")) },
+    });
+    const rowEl = nodeRow("Work/A");
+    stubRowRect(rowEl);
+    dispatchDrag(rowEl, "drop", "Work/B", 35);
+    await flush();
+    expect(documents.move).toHaveBeenCalledWith("Work/B", "Work", "Work/C");
   });
 });

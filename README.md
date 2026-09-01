@@ -41,7 +41,7 @@ Existing ordinary Markdown notes are not converted into NestNote documents, and 
 | ------ | --- |
 | Open a document | Click the document name in the sidebar |
 | New child document | The button on that row; creates under that document |
-| Reparent | Drag a document onto another document to nest it, or onto empty space in the tree to make it a root document. Sibling order stays alphabetical |
+| Reparent and reorder | Drag onto another document to nest it, or onto empty space in the tree to make it a root. Drag above or below a sibling to reorder. Root documents stay sorted by name |
 | Rename | Row **More** → Rename |
 | Expand all / Collapse all children | Row **More** → **Expand all** or **Collapse all**. Toggles every nested child under that document. Hidden when the document has no children |
 | Delete | Row **More** → Delete; **every delete asks for confirmation** |
@@ -182,7 +182,7 @@ A parent’s `index.md` contains a plugin-maintained list. On create, it is plac
 This is your own body text. The plugin does not change content outside these markers.
 ```
 
-Creating, deleting, renaming, or moving a child updates only the list between the two markers, sorted by document name. There is one blank line between the list and each marker; missing blank lines do not affect parsing. Links are ordinary relative paths; spaces in names are written as `%20`. Hand-written links in the body are not scanned, deleted, or rewritten. When Auto-fix document format is on (the default), scans also rewrite this region to the canonical format, inserting it after the header if the markers are missing. When the option is off, scans do not change existing files.
+Creating, deleting, renaming, or moving a child updates only the list between the two markers. Order matches the sidebar: custom order is written in the marker region; new children are appended at the end. Scans and auto-fix preserve that order, only filling gaps, removing dead links, and writing canonical blank lines. There is one blank line between the list and each marker; missing blank lines do not affect parsing. Links are ordinary relative paths; spaces in names are written as `%20`. Hand-written links in the body are not scanned, deleted, or rewritten. When Auto-fix document format is on (the default), scans also rewrite this region to the canonical format, inserting it after the header if the markers are missing. When the option is off, scans do not change existing files.
 
 ### Attachments
 

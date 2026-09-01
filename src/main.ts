@@ -11,6 +11,7 @@ import type {
 import { scanDocuments } from "./domain/document-scanner";
 import {
   ChildrenLinksError,
+  applyChildrenOrder,
   updateChildrenLinks,
 } from "./domain/children-links";
 import {
@@ -337,8 +338,13 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
     }
     try {
       await this.coordinator.runInternal(async () => {
-        const metadataNodes = scanFromApp(this.app, 9);
-        this.nodes = scanFromApp(this.app, this.settings.maxChildDepth);
+        const metadataRaw = scanFromApp(this.app, 9);
+        const contents = await readIndexContents(this.app, metadataRaw);
+        const metadataNodes = applyChildrenOrder(metadataRaw, contents);
+        this.nodes = applyChildrenOrder(
+          scanFromApp(this.app, this.settings.maxChildDepth),
+          contents,
+        );
         if (this.settings.autoFixDocumentFormat) {
           await syncDocumentMetadata(this.app, metadataNodes);
         }
@@ -372,8 +378,10 @@ function wrapWithInternal(
       coordinator.runInternal(() => inner.rename(documentPath, newName)),
     trash: (documentPath) =>
       coordinator.runInternal(() => inner.trash(documentPath)),
-    move: (documentPath, newParentPath) =>
-      coordinator.runInternal(() => inner.move(documentPath, newParentPath)),
+    move: (documentPath, newParentPath, insertBeforePath) =>
+      coordinator.runInternal(() =>
+        inner.move(documentPath, newParentPath, insertBeforePath),
+      ),
     open: (documentPath) => inner.open(documentPath),
   };
 }
@@ -582,6 +590,32 @@ function scanFromApp(app: App, maxChildDepth: number): DocumentNode[] {
     });
   }
   return scanDocuments(entries, { maxChildDepth });
+}
+
+function collectIndexPaths(nodes: readonly DocumentNode[]): string[] {
+  return nodes.flatMap((node) => [
+    node.indexPath,
+    ...collectIndexPaths(node.children),
+  ]);
+}
+
+async function readIndexContents(
+  app: App,
+  nodes: readonly DocumentNode[],
+): Promise<Map<string, string>> {
+  const contents = new Map<string, string>();
+  for (const indexPath of collectIndexPaths(nodes)) {
+    const file = getFile(app, indexPath);
+    if (file === null) {
+      continue;
+    }
+    try {
+      contents.set(indexPath, await app.vault.read(file));
+    } catch {
+      // 该级回退按名称：applyChildrenOrder 在缺内容时 parse 为空
+    }
+  }
+  return contents;
 }
 
 async function syncDocumentMetadata(

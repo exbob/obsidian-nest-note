@@ -35,8 +35,7 @@ function renderChildrenRegion(
   children: readonly DocumentNode[],
   newline: "\n" | "\r\n",
 ): string {
-  const sorted = [...children].sort((a, b) => a.name.localeCompare(b.name));
-  const links = sorted.map((child) => {
+  const links = children.map((child) => {
     const relative = relativeChildIndex(parentPath, child);
     return `- [${escapeLinkLabel(child.name)}](${encodeLinkPath(relative)})`;
   });
@@ -283,4 +282,120 @@ function encodeLinkSegment(segment: string): string {
     encoded += unreserved ? char : encodeURIComponent(char);
   }
   return encoded;
+}
+
+export function parseChildrenOrder(content: string): string[] {
+  const fences = findFencedCodeRanges(content);
+  const startIdx = indexOfOutsideFences(content, CHILDREN_START, 0, fences);
+  if (startIdx === -1) {
+    return [];
+  }
+  const endIdx = indexOfOutsideFences(
+    content,
+    CHILDREN_END,
+    startIdx + CHILDREN_START.length,
+    fences,
+  );
+  if (endIdx === -1) {
+    return [];
+  }
+
+  const region = content.slice(startIdx + CHILDREN_START.length, endIdx);
+  const names: string[] = [];
+  const linkPattern = /^- \[.*\]\((.+)\)$/;
+
+  for (const line of region.split(/\r?\n/)) {
+    const match = linkPattern.exec(line.trim());
+    if (match === null) {
+      continue;
+    }
+    const name = documentNameFromLinkPath(match[1]);
+    if (name !== null) {
+      names.push(name);
+    }
+  }
+
+  return names;
+}
+
+function documentNameFromLinkPath(rawPath: string): string | null {
+  let path = rawPath;
+  try {
+    path = decodeURIComponent(rawPath);
+  } catch {
+    path = rawPath;
+  }
+  path = path.replace(/\\/g, "/");
+  const segments = path.split("/");
+  if (segments.length >= 2 && segments[segments.length - 1] === "index.md") {
+    return segments[segments.length - 2];
+  }
+  return null;
+}
+
+export function mergeChildrenOrder(
+  orderedNames: readonly string[],
+  live: readonly DocumentNode[],
+): DocumentNode[] {
+  const remaining = [...live];
+  const result: DocumentNode[] = [];
+
+  for (const name of orderedNames) {
+    const index = remaining.findIndex((node) => node.name === name);
+    if (index === -1) {
+      continue;
+    }
+    result.push(remaining[index]);
+    remaining.splice(index, 1);
+  }
+
+  remaining.sort((a, b) => a.name.localeCompare(b.name));
+  return [...result, ...remaining];
+}
+
+export function placeChild<T extends { path: string }>(
+  siblings: readonly T[],
+  node: T,
+  insertBeforePath?: string | null,
+): T[] {
+  if (
+    insertBeforePath === null ||
+    insertBeforePath === undefined ||
+    insertBeforePath === node.path ||
+    !siblings.some((sibling) => sibling.path === insertBeforePath)
+  ) {
+    return [...siblings, node];
+  }
+
+  const result: T[] = [];
+  for (const sibling of siblings) {
+    if (sibling.path === insertBeforePath) {
+      result.push(node);
+    }
+    result.push(sibling);
+  }
+  return result;
+}
+
+export function renameInOrder(
+  orderedNames: readonly string[],
+  fromName: string,
+  toName: string,
+): string[] {
+  return orderedNames.map((name) => (name === fromName ? toName : name));
+}
+
+export function applyChildrenOrder(
+  nodes: readonly DocumentNode[],
+  indexContents: ReadonlyMap<string, string>,
+): DocumentNode[] {
+  return nodes.map((node) => {
+    const content = indexContents.get(node.indexPath);
+    const orderedNames = content === undefined ? [] : parseChildrenOrder(content);
+    const children = applyChildrenOrder(
+      mergeChildrenOrder(orderedNames, node.children),
+      indexContents,
+    );
+    return { ...node, children };
+  });
 }

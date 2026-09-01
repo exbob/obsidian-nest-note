@@ -1,5 +1,9 @@
 import {
   ChildrenLinksError,
+  mergeChildrenOrder,
+  parseChildrenOrder,
+  placeChild,
+  renameInOrder,
   updateChildrenLinks,
 } from "../domain/children-links";
 import { scanDocuments } from "../domain/document-scanner";
@@ -189,6 +193,7 @@ export class NestNoteDocumentService implements DocumentService {
       await this.assertParentWritable(parent, previewChildren);
     }
 
+    const fromName = getName(from);
     if (to !== from) {
       await this.app.vault.rename(folder, to);
     }
@@ -206,7 +211,15 @@ export class NestNoteDocumentService implements DocumentService {
       pendingWrites.push({ path: `${to}/index.md`, content: nextIndex });
     }
     if (parent !== null && this.isCompleteDocument(parent)) {
-      pendingWrites.push(await this.freshParentWrite(parent));
+      const live = this.requireScannedNode(parent).children;
+      const indexFile = this.requireIndex(parent);
+      const content = await this.app.vault.read(indexFile);
+      const names = renameInOrder(
+        parseChildrenOrder(content),
+        fromName,
+        documentName,
+      );
+      pendingWrites.push(await this.mergeParentWrite(parent, live, names));
     }
 
     await this.flushWrites(pendingWrites);
@@ -238,13 +251,22 @@ export class NestNoteDocumentService implements DocumentService {
   async move(
     documentPath: string,
     newParentPath: string | null,
+    insertBeforePath?: string | null,
   ): Promise<DocumentNode> {
     const from = this.requireDocument(documentPath);
     const newParent = this.resolveParent(newParentPath);
     const oldParent = getParentPath(from);
+
     if (oldParent === newParent) {
-      return this.requireScannedNode(from);
+      if (newParent === null) {
+        return this.requireScannedNode(from);
+      }
+      if (insertBeforePath === from) {
+        return this.requireScannedNode(from);
+      }
+      return this.reorderUnderParent(from, newParent, insertBeforePath);
     }
+
     if (newParent === from) {
       throw new DocumentServiceError(t("error.cannotMoveIntoSelf"));
     }
@@ -291,17 +313,41 @@ export class NestNoteDocumentService implements DocumentService {
     }
     if (newParent !== null) {
       const current = this.requireScannedNode(newParent);
-      await this.assertParentWritable(newParent, [...current.children, preview]);
+      const indexFile = this.requireIndex(newParent);
+      const content = await this.app.vault.read(indexFile);
+      const merged = mergeChildrenOrder(
+        parseChildrenOrder(content),
+        current.children,
+      );
+      await this.assertParentWritable(
+        newParent,
+        placeChild(merged, preview, insertBeforePath ?? null),
+      );
     }
 
     await this.app.vault.rename(folder, to);
 
     const pendingWrites: PendingWrite[] = [];
     if (oldParent !== null && this.isCompleteDocument(oldParent)) {
-      pendingWrites.push(await this.freshParentWrite(oldParent));
+      pendingWrites.push(
+        await this.mergeParentWrite(
+          oldParent,
+          this.requireScannedNode(oldParent).children,
+        ),
+      );
     }
     if (newParent !== null && this.isCompleteDocument(newParent)) {
-      pendingWrites.push(await this.freshParentWrite(newParent));
+      const live = this.requireScannedNode(newParent).children;
+      const indexFile = this.requireIndex(newParent);
+      const content = await this.app.vault.read(indexFile);
+      const without = live.filter((child) => child.path !== to);
+      const merged = mergeChildrenOrder(parseChildrenOrder(content), without);
+      const moved = live.find((child) => child.path === to);
+      if (moved === undefined) {
+        throw new DocumentServiceError(t("error.documentNotFound", { path: to }));
+      }
+      const next = placeChild(merged, moved, insertBeforePath ?? null);
+      pendingWrites.push(this.writeParentChildren(newParent, content, next));
     }
     await this.flushWrites(pendingWrites);
     return this.requireScannedNode(to);
@@ -392,24 +438,64 @@ export class NestNoteDocumentService implements DocumentService {
     return indexFile;
   }
 
+  private async reorderUnderParent(
+    from: string,
+    parentPath: string,
+    insertBeforePath?: string | null,
+  ): Promise<DocumentNode> {
+    const indexFile = this.requireIndex(parentPath);
+    const content = await this.app.vault.read(indexFile);
+    const live = this.requireScannedNode(parentPath).children;
+    const current = mergeChildrenOrder(parseChildrenOrder(content), live);
+    const without = current.filter((child) => child.path !== from);
+    const source =
+      current.find((child) => child.path === from) ??
+      this.requireScannedNode(from);
+    const next = placeChild(without, source, insertBeforePath ?? null);
+    const unchanged =
+      next.length === current.length &&
+      next.every((child, index) => child.path === current[index].path);
+    if (unchanged) {
+      return this.requireScannedNode(from);
+    }
+    await this.flushWrites([
+      this.writeParentChildren(parentPath, content, next),
+    ]);
+    return this.requireScannedNode(from);
+  }
+
   private async assertParentWritable(
     parentPath: string,
     children: readonly DocumentNode[],
   ): Promise<void> {
-    await this.computeParentWrite(parentPath, children);
+    const indexFile = this.requireIndex(parentPath);
+    const content = await this.app.vault.read(indexFile);
+    this.writeParentChildren(parentPath, content, children);
   }
 
   private async freshParentWrite(parentPath: string): Promise<PendingWrite> {
     const parent = this.requireScannedNode(parentPath);
-    return this.computeParentWrite(parentPath, parent.children);
+    return this.mergeParentWrite(parentPath, parent.children);
   }
 
-  private async computeParentWrite(
+  private async mergeParentWrite(
     parentPath: string,
-    children: readonly DocumentNode[],
+    liveChildren: readonly DocumentNode[],
+    orderedNames?: readonly string[],
   ): Promise<PendingWrite> {
     const indexFile = this.requireIndex(parentPath);
     const content = await this.app.vault.read(indexFile);
+    const names = orderedNames ?? parseChildrenOrder(content);
+    const ordered = mergeChildrenOrder(names, liveChildren);
+    return this.writeParentChildren(parentPath, content, ordered);
+  }
+
+  private writeParentChildren(
+    parentPath: string,
+    content: string,
+    children: readonly DocumentNode[],
+  ): PendingWrite {
+    const indexFile = this.requireIndex(parentPath);
     return {
       path: indexFile.path,
       content: this.runMetadata(() => {

@@ -76,15 +76,7 @@ export class DocumentTreeView extends ItemView {
       event.preventDefault();
       this.clearDropHighlights();
       const source = event.dataTransfer?.getData(NESTNOTE_DOCUMENT_DRAG_MIME) ?? "";
-      const closestNode =
-        event.target instanceof Element
-          ? event.target.closest(".nestnote-node")
-          : null;
-      const parent =
-        closestNode instanceof HTMLElement
-          ? (closestNode.dataset.path ?? null)
-          : null;
-      void this.handleDrop(source, parent);
+      void this.handleDrop(source, null, null);
     });
     this.contentEl.append(toolbar, tree);
     this.render(this.options.getNodes());
@@ -150,11 +142,22 @@ export class DocumentTreeView extends ItemView {
       event.preventDefault();
       event.stopPropagation();
       this.clearDropHighlights();
-      item.classList.add("is-drop-target");
+      const zone = this.dropZone(event, item, node, row);
+      if (zone === "before") {
+        item.classList.add("is-drop-before");
+      } else if (zone === "after") {
+        item.classList.add("is-drop-after");
+      } else {
+        item.classList.add("is-drop-target");
+      }
     });
     item.addEventListener("dragleave", (event) => {
       if (event.currentTarget instanceof HTMLElement) {
-        event.currentTarget.classList.remove("is-drop-target");
+        event.currentTarget.classList.remove(
+          "is-drop-target",
+          "is-drop-before",
+          "is-drop-after",
+        );
       }
     });
     item.addEventListener("drop", (event) => {
@@ -162,7 +165,16 @@ export class DocumentTreeView extends ItemView {
       event.stopPropagation();
       this.clearDropHighlights();
       const source = event.dataTransfer?.getData(NESTNOTE_DOCUMENT_DRAG_MIME) ?? "";
-      void this.handleDrop(source, node.path);
+      const zone = this.dropZone(event, item, node, row);
+      if ((zone === "before" || zone === "after") && source === node.path) {
+        return;
+      }
+      const { newParentPath, insertBeforePath } = this.dropParams(
+        node,
+        zone,
+        source,
+      );
+      void this.handleDrop(source, newParentPath, insertBeforePath);
     });
 
     if (node.children.length > 0) {
@@ -318,16 +330,90 @@ export class DocumentTreeView extends ItemView {
     }
   }
 
+  private isRootPath(path: string): boolean {
+    return this.nodes.some((root) => root.path === path) || !path.includes("/");
+  }
+
+  private dropZone(
+    event: DragEvent,
+    item: HTMLElement,
+    node: DocumentNode,
+    row: HTMLElement,
+  ): DropZone {
+    const children = item.querySelector(":scope > .nestnote-children");
+    const target = event.target;
+    if (
+      children instanceof HTMLElement &&
+      target instanceof Node &&
+      children.contains(target) &&
+      !row.contains(target)
+    ) {
+      return "into";
+    }
+    if (this.isRootPath(node.path)) {
+      return "into";
+    }
+    const rect = row.getBoundingClientRect();
+    if (rect.height === 0) {
+      return "into";
+    }
+    const y = event.clientY - rect.top;
+    if (y < rect.height * 0.25) {
+      return "before";
+    }
+    if (y >= rect.height * 0.75) {
+      return "after";
+    }
+    return "into";
+  }
+
+  private dropParams(
+    node: DocumentNode,
+    zone: DropZone,
+    sourcePath: string,
+  ): { newParentPath: string | null; insertBeforePath: string | null } {
+    if (zone === "before") {
+      return { newParentPath: parentPath(node.path), insertBeforePath: node.path };
+    }
+    if (zone === "after") {
+      return {
+        newParentPath: parentPath(node.path),
+        insertBeforePath: this.nextSiblingPath(node.path, sourcePath),
+      };
+    }
+    return { newParentPath: node.path, insertBeforePath: null };
+  }
+
+  private nextSiblingPath(targetPath: string, sourcePath: string): string | null {
+    const parent = parentPath(targetPath);
+    const siblings =
+      parent === null ? this.nodes : findNode(this.nodes, parent)?.children ?? [];
+    const index = siblings.findIndex((sibling) => sibling.path === targetPath);
+    if (index === -1) {
+      return null;
+    }
+    for (let i = index + 1; i < siblings.length; i++) {
+      const sibling = siblings[i];
+      if (sibling.path !== sourcePath) {
+        return sibling.path;
+      }
+    }
+    return null;
+  }
+
   private clearDropHighlights(): void {
     this.treeEl?.classList.remove("is-drop-root");
     this.treeEl
-      ?.querySelectorAll(".is-drop-target")
-      .forEach((el) => el.classList.remove("is-drop-target"));
+      ?.querySelectorAll(".is-drop-target, .is-drop-before, .is-drop-after")
+      .forEach((el) => {
+        el.classList.remove("is-drop-target", "is-drop-before", "is-drop-after");
+      });
   }
 
   private async handleDrop(
     sourcePath: string,
     newParentPath: string | null,
+    insertBeforePath?: string | null,
   ): Promise<void> {
     if (sourcePath === "") {
       return;
@@ -336,6 +422,7 @@ export class DocumentTreeView extends ItemView {
       const moved = await this.options.documents.move(
         sourcePath,
         newParentPath,
+        insertBeforePath ?? null,
       );
       await this.options.requestRefresh();
       this.reveal(moved.path);
@@ -512,6 +599,29 @@ function iconButton(
   setIcon(button, icon);
   button.addEventListener("click", onClick);
   return button;
+}
+
+type DropZone = "before" | "after" | "into";
+
+function parentPath(path: string): string | null {
+  const slash = path.lastIndexOf("/");
+  return slash === -1 ? null : path.slice(0, slash);
+}
+
+function findNode(
+  nodes: readonly DocumentNode[],
+  path: string,
+): DocumentNode | undefined {
+  for (const node of nodes) {
+    if (node.path === path) {
+      return node;
+    }
+    const found = findNode(node.children, path);
+    if (found !== undefined) {
+      return found;
+    }
+  }
+  return undefined;
 }
 
 function ancestorPaths(path: string): string[] {

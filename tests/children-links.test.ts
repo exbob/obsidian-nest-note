@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyChildrenOrder,
   ChildrenLinksError,
+  mergeChildrenOrder,
+  parseChildrenOrder,
+  placeChild,
+  renameInOrder,
   updateChildrenLinks,
 } from "../src/domain/children-links";
 import { FrontmatterParseError } from "../src/domain/frontmatter";
@@ -106,7 +111,7 @@ See [手工](other.md)
 `);
   });
 
-  it("sorts children by name and uses paths relative to the parent index directory", () => {
+  it("writes children in the given order and uses paths relative to the parent index directory", () => {
     const parentPath = "Work/父";
     const unsorted = [child("文档2", parentPath), child("文档1", parentPath)];
 
@@ -118,8 +123,8 @@ See [手工](other.md)
 
     expect(result).toBe(`<!-- nestnote:children:start -->
 
-- [文档1](文档1/index.md)
 - [文档2](文档2/index.md)
+- [文档1](文档1/index.md)
 
 <!-- nestnote:children:end -->
 `);
@@ -365,5 +370,100 @@ created: 2026-08-28T19:00:00+08:00
     expect(result).toContain("- [foo\\[bar\\]](");
     expect(result).toContain("foo%5Bbar%5D/index.md");
     expect(result).not.toContain("- [foo[bar]](");
+  });
+});
+
+describe("child order", () => {
+  it("parses document names from marker links, not labels, and decodes %20", () => {
+    const content = `<!-- nestnote:children:start -->
+- [旧标题](项目%20B/index.md)
+not a link
+- [A](项目%20A/index.md)
+<!-- nestnote:children:end -->`;
+    expect(parseChildrenOrder(content)).toEqual(["项目 B", "项目 A"]);
+  });
+
+  it("returns an empty order when markers are missing or unmatched", () => {
+    expect(parseChildrenOrder("# Body\n")).toEqual([]);
+    expect(
+      parseChildrenOrder("<!-- nestnote:children:start -->\n- [A](A/index.md)\n"),
+    ).toEqual([]);
+  });
+
+  it("ignores paired markers inside fenced code", () => {
+    const content = `# Intro
+\`\`\`md
+<!-- nestnote:children:start -->
+- [示例](示例/index.md)
+<!-- nestnote:children:end -->
+\`\`\`
+<!-- nestnote:children:start -->
+- [真](真/index.md)
+<!-- nestnote:children:end -->
+`;
+    expect(parseChildrenOrder(content)).toEqual(["真"]);
+  });
+
+  it("merges live nodes in listed order and appends unknown names sorted", () => {
+    const live = [child("C"), child("A"), child("B")];
+    const merged = mergeChildrenOrder(["B", "gone", "A"], live);
+    expect(merged.map((node) => node.name)).toEqual(["B", "A", "C"]);
+    expect(live.map((node) => node.name)).toEqual(["C", "A", "B"]);
+  });
+
+  it("sorts live children by name when orderedNames is empty", () => {
+    expect(mergeChildrenOrder([], [child("B"), child("A")]).map((n) => n.name)).toEqual([
+      "A",
+      "B",
+    ]);
+  });
+
+  it("places a node before a sibling or appends when the path is missing", () => {
+    const a = child("A");
+    const b = child("B");
+    const c = child("C");
+    expect(placeChild([a, c], b, c.path).map((n) => n.name)).toEqual(["A", "B", "C"]);
+    expect(placeChild([a, c], b, null).map((n) => n.name)).toEqual(["A", "C", "B"]);
+    expect(placeChild([a, c], b, b.path).map((n) => n.name)).toEqual(["A", "C", "B"]);
+    expect(placeChild([a, c], b, "Work/missing").map((n) => n.name)).toEqual([
+      "A",
+      "C",
+      "B",
+    ]);
+  });
+
+  it("renames one entry in an order list", () => {
+    expect(renameInOrder(["B", "A", "C"], "A", "Alpha")).toEqual(["B", "Alpha", "C"]);
+  });
+
+  it("reorders each node's children from that node's index contents; roots stay as given", () => {
+    const tree: DocumentNode[] = [
+      {
+        name: "Work",
+        path: "Work",
+        indexPath: "Work/index.md",
+        attachmentsPath: "Work/attachments",
+        children: [child("A", "Work"), child("B", "Work")],
+      },
+      {
+        name: "Inbox",
+        path: "Inbox",
+        indexPath: "Inbox/index.md",
+        attachmentsPath: "Inbox/attachments",
+        children: [],
+      },
+    ];
+    const contents = new Map([
+      [
+        "Work/index.md",
+        `<!-- nestnote:children:start -->
+- [B](B/index.md)
+- [A](A/index.md)
+<!-- nestnote:children:end -->`,
+      ],
+    ]);
+    const ordered = applyChildrenOrder(tree, contents);
+    expect(ordered.map((n) => n.path)).toEqual(["Work", "Inbox"]);
+    expect(ordered[0].children.map((n) => n.name)).toEqual(["B", "A"]);
   });
 });

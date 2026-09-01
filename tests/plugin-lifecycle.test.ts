@@ -866,6 +866,60 @@ created: 2020-01-01T00:00:00Z
     );
   });
 
+  it("keeps custom child-link order when auto-fix rewrites the region", async () => {
+    vi.useFakeTimers();
+    const app = createApp((vault) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+created: 2020-01-01T00:00:00Z
+---
+# Body
+<!-- nestnote:children:start -->
+- [B](B/index.md)
+- [A](A/index.md)
+<!-- nestnote:children:end -->
+`,
+      );
+      seedDocument(
+        vault,
+        "Work/A",
+        `---
+name: A
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+      seedDocument(
+        vault,
+        "Work/B",
+        `---
+name: B
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+    });
+    const plugin = loadPlugin(app);
+    await plugin.onload();
+    app.workspace.markReady();
+    await settle();
+
+    const content = app.vault.files.get("Work/index.md") ?? "";
+    expect(content).toContain("name: Work");
+    expect(content.indexOf("- [B](B/index.md)")).toBeLessThan(
+      content.indexOf("- [A](A/index.md)"),
+    );
+
+    command(plugin, "nestnote:refresh")();
+    await settle();
+    const again = app.vault.files.get("Work/index.md") ?? "";
+    expect(again.indexOf("- [B](B/index.md)")).toBeLessThan(
+      again.indexOf("- [A](A/index.md)"),
+    );
+  });
+
   it("does not rewrite index files on scan when auto-fix is disabled", async () => {
     vi.useFakeTimers();
     const original = `---
