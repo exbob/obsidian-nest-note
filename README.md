@@ -28,7 +28,7 @@ You can also bind these commands under **Settings → Hotkeys**.
 
 ### Create the first document
 
-When the vault has no NestNote documents yet, use **New document** in the sidebar toolbar (or the command **NestNote: New document**). It always creates at the vault root and ignores which sidebar row is selected. Enter a valid name in the dialog, then press **Enter** or confirm.
+When the vault has no NestNote documents yet, use **New root document** in the sidebar toolbar (or the command **NestNote: New root document**). It always creates at the vault root and ignores which sidebar row is selected. Enter a valid name in the dialog, then press **Enter** or confirm.
 
 After the document is created, NestNote opens its `index.md` and selects it in the sidebar (expanding ancestors when needed). Opening any NestNote document the same way — including clicking a child-document link inside an index, or restoring the last open document on startup — also expands the sidebar to that document.
 
@@ -85,7 +85,7 @@ Names in the command palette (prefixed with `NestNote:`):
 | Command | What it does |
 | ------- | ------------ |
 | Open document tree | Opens the NestNote pane |
-| New document | Creates a document at the vault root, then opens its `index.md` |
+| New root document | Creates a document at the vault root, then opens its `index.md` |
 | New child document | Creates a child under the currently open document, then opens its `index.md` |
 | Refresh | Rescans and refreshes the sidebar |
 | Archive current attachment | Moves the currently open attachment into its owning document’s `attachments/` |

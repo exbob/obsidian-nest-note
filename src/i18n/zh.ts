@@ -2,7 +2,7 @@ import type { MessageKey } from "./types";
 
 export const zh: Record<MessageKey, string> = {
   "command.openDocumentTree": "打开文档树",
-  "command.newDocument": "新建文档",
+  "command.newDocument": "新建根文档",
   "command.newChildDocument": "新建子文档",
   "command.refresh": "刷新",
   "command.archiveCurrentAttachment": "归档当前附件",

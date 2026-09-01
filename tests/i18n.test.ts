@@ -82,6 +82,15 @@ describe("t", () => {
     );
   });
 
+  it("labels new root document distinctly from new child document", () => {
+    setLocaleForTests("zh");
+    expect(t("command.newDocument")).toBe("新建根文档");
+    expect(t("command.newChildDocument")).toBe("新建子文档");
+    setLocaleForTests("en");
+    expect(t("command.newDocument")).toBe("New root document");
+    expect(t("command.newChildDocument")).toBe("New child document");
+  });
+
   it("translates move cycle errors", () => {
     setLocaleForTests("zh");
     expect(t("error.cannotMoveIntoSelf")).toBe("不能将文档移动到自身");

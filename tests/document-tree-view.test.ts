@@ -440,6 +440,9 @@ describe("DocumentTreeView", () => {
       expect(button.tagName).toBe("BUTTON");
       expect(button.dataset.icon).toBeTruthy();
     }
+    expect(action("Work", t("command.newChildDocument")).dataset.icon).toBe(
+      "plus",
+    );
     expect(action("Work", t("ui.more")).dataset.icon).toBe("ellipsis-vertical");
     expect(action("Work", t("ui.expand")).dataset.icon).toBeTruthy();
     action("Work", t("ui.more")).click();

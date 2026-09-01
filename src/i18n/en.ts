@@ -2,7 +2,7 @@ import type { MessageKey } from "./types";
 
 export const en: Record<MessageKey, string> = {
   "command.openDocumentTree": "Open document tree",
-  "command.newDocument": "New document",
+  "command.newDocument": "New root document",
   "command.newChildDocument": "New child document",
   "command.refresh": "Refresh",
   "command.archiveCurrentAttachment": "Archive current attachment",

@@ -203,7 +203,7 @@ export class DocumentTreeView extends ItemView {
 
     const actions = createEl("div", { cls: "nestnote-actions" });
     actions.append(
-      iconButton("plus-circle", t("command.newChildDocument"), (event) => {
+      iconButton("plus", t("command.newChildDocument"), (event) => {
         event.stopPropagation();
         this.openNameModal(t("command.newChildDocument"), "", (name) =>
           this.createAndOpen(node.path, name),
