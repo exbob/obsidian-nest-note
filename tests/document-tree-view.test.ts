@@ -464,13 +464,13 @@ describe("DocumentTreeView", () => {
     const expandAll = toolbar(t("ui.expandAll"));
     expect(expandAll).toBeInstanceOf(HTMLButtonElement);
     expect((expandAll as HTMLButtonElement).disabled).toBe(false);
-    expect((expandAll as HTMLButtonElement).dataset.icon).toBe("chevrons-down");
+    expect((expandAll as HTMLButtonElement).dataset.icon).toBe("chevrons-up-down");
     expandAll.click();
     expect(row("Work").classList.contains("is-expanded")).toBe(true);
     expect(row("Work/Notes").classList.contains("is-expanded")).toBe(true);
     expect(toolbar(t("ui.collapseAll"))).toBeTruthy();
     expect((toolbar(t("ui.collapseAll")) as HTMLButtonElement).dataset.icon).toBe(
-      "chevrons-up",
+      "chevrons-down-up",
     );
     expect(requestRefresh).not.toHaveBeenCalled();
     toolbar(t("ui.collapseAll")).click();

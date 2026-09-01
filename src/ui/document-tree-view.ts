@@ -47,7 +47,7 @@ export class DocumentTreeView extends ItemView {
     this.contentEl.classList.add("nestnote-view");
 
     const toolbar = createEl("div", { cls: "nestnote-toolbar" });
-    this.allToggleButton = iconButton("chevrons-down", t("ui.expandAll"), () => {
+    this.allToggleButton = iconButton("chevrons-up-down", t("ui.expandAll"), () => {
       this.toggleAllExpanded();
     });
     toolbar.append(
@@ -277,7 +277,7 @@ export class DocumentTreeView extends ItemView {
     button.disabled = paths.length === 0;
     const label = allExpanded ? t("ui.collapseAll") : t("ui.expandAll");
     button.setAttribute("aria-label", label);
-    setIcon(button, allExpanded ? "chevrons-up" : "chevrons-down");
+    setIcon(button, allExpanded ? "chevrons-down-up" : "chevrons-up-down");
   }
 
   private async openDocument(path: string): Promise<void> {
