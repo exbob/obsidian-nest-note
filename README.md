@@ -66,6 +66,7 @@ Under Obsidian **Settings → NestNote**:
 | ------- | ----------- |
 | Max child document depth | Range `0`–`9`, default `5`. Root documents are depth `0`. Directories beyond the limit are hidden in the sidebar and cannot be created as deeper children. `0` shows only root documents |
 | Open the NestNote pane on startup | On by default. Applies on the next launch; it does not close a pane that is already open |
+| Auto-fix document format | On by default. During scans, fill missing header fields and child-link markers, and rewrite the child list to the canonical format. When off, parent links update only when you create, delete, rename, or move a child document |
 
 
 ### Delete
@@ -181,7 +182,7 @@ A parent’s `index.md` contains a plugin-maintained list. On create, it is plac
 This is your own body text. The plugin does not change content outside these markers.
 ```
 
-Creating, deleting, or renaming a child updates only the list between the two markers, sorted by document name. There is one blank line between the list and each marker; missing blank lines do not affect parsing. Links are ordinary relative paths; spaces in names are written as `%20`. Hand-written links in the body are not scanned, deleted, or rewritten. If the markers are missing, the plugin creates a region after the header.
+Creating, deleting, renaming, or moving a child updates only the list between the two markers, sorted by document name. There is one blank line between the list and each marker; missing blank lines do not affect parsing. Links are ordinary relative paths; spaces in names are written as `%20`. Hand-written links in the body are not scanned, deleted, or rewritten. When Auto-fix document format is on (the default), scans also rewrite this region to the canonical format, inserting it after the header if the markers are missing. When the option is off, scans do not change existing files.
 
 ### Attachments
 
