@@ -42,14 +42,18 @@ Existing ordinary Markdown notes are not converted into NestNote documents, and 
 | Open a document | Click the document name in the sidebar |
 | New child document | The button on that row; creates under that document |
 | Reparent and reorder | Drag onto another document to nest it, or onto empty space in the tree to make it a root. Drag above or below a sibling to reorder. Root documents stay sorted by name |
-| Rename | Row **More** → Rename |
-| Expand all / Collapse all children | Row **More** → **Expand all** or **Collapse all**. Toggles every nested child under that document. Hidden when the document has no children |
-| Delete | Row **More** → Delete; **every delete asks for confirmation** |
+| Expand all / Collapse all children | Row **More** or right-click → **Expand all** or **Collapse all**. Toggles every nested child under that document. Hidden when the document has no children |
+| Copy relative path | Row **More** or right-click. Copies the vault-relative path of that document's `index.md` |
+| Copy absolute path | Row **More** or right-click. Copies the local absolute path of that document's `index.md` |
+| Open in default app | Row **More** or right-click. Opens that document's `index.md` with the system default app |
+| Show in system explorer | Row **More** or right-click. Reveals that document's `index.md` in the system file manager |
+| Rename | Row **More** or right-click → Rename |
+| Delete | Row **More** or right-click → Delete; **every delete asks for confirmation** |
 | Expand all / Collapse all | Toolbar button. If any expandable node is still collapsed, the label is **Expand all**; after everything is expanded it becomes **Collapse all**. Disabled when nothing can be expanded. This only changes expansion state and does not rescan files |
 | Refresh | Toolbar button, or the command **NestNote: Refresh**. The whole tree also refreshes automatically after vault file changes |
 
 
-![Sidebar document tree with the More menu open on a row](docs/images/zh-sidebar-row.png)
+![Sidebar document tree with the More or right-click menu open on a row](docs/images/zh-sidebar-row.png)
 
 Use the plus button on a row to create a child document:
 
@@ -256,6 +260,7 @@ src/
 │   ├── attachment-service.ts        # attachment watch and archive
 │   └── vault-event-coordinator.ts   # vault event coalesce and refresh
 └── ui/
+    ├── desktop-file-actions.ts      # copy path, open with OS
     ├── document-tree-view.ts        # sidebar
     └── settings-tab.ts              # settings tab
 tests/                               # Vitest
