@@ -710,7 +710,7 @@ function initialIndexBody(name: string): string {
     `# ${name}`,
     "",
     "",
-    `## ${t("ui.childrenHeading")}`,
+    `# ${t("ui.childrenHeading")}`,
     "",
     "<!-- nestnote:children:start -->",
     "",

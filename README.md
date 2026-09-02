@@ -152,7 +152,7 @@ created: 2026-08-28T19:00:00+08:00
 # Work
 
 
-## Child Document
+# Child Document
 
 <!-- nestnote:children:start -->
 
@@ -174,7 +174,7 @@ The **directory name** is authoritative. If this header is missing, the plugin i
 A parent’s `index.md` contains a plugin-maintained list. On create, it is placed under the “Child Document” heading:
 
 ```markdown
-## Child Document
+# Child Document
 
 <!-- nestnote:children:start -->
 

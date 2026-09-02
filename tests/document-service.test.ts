@@ -267,7 +267,7 @@ created: ${created}
 # ${name}
 
 
-## ${childrenHeading}
+# ${childrenHeading}
 
 <!-- nestnote:children:start -->
 
