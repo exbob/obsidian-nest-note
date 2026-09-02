@@ -3,6 +3,8 @@ import type { App, WorkspaceLeaf } from "obsidian";
 import { t } from "../i18n";
 import type { DocumentNode, DocumentService } from "../types";
 import { isAlreadyNoticed } from "../services/document-service";
+import type { DesktopFileActions } from "./desktop-file-actions";
+import { createDesktopFileActions } from "./desktop-file-actions";
 
 export const VIEW_TYPE_NESTNOTE = "nestnote-document-tree";
 
@@ -14,6 +16,7 @@ export interface DocumentTreeViewOptions {
   getNodes: () => readonly DocumentNode[];
   requestRefresh: () => Promise<void>;
   notice?: (message: string) => void;
+  desktop?: DesktopFileActions;
 }
 
 export class DocumentTreeView extends ItemView {
@@ -122,6 +125,11 @@ export class DocumentTreeView extends ItemView {
     }
 
     const row = createEl("div", { cls: "nestnote-row" });
+    row.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.showDocumentMenu(node, event);
+    });
     row.draggable = true;
     row.addEventListener("dragstart", (event) => {
       const target = event.target;
@@ -211,37 +219,7 @@ export class DocumentTreeView extends ItemView {
       }),
       iconButton("ellipsis-vertical", t("ui.more"), (event) => {
         event.stopPropagation();
-        const menu = new Menu();
-        const subtreePaths = this.expandablePaths([node]);
-        if (subtreePaths.length > 0) {
-          const allExpanded = subtreePaths.every((path) =>
-            this.expanded.has(path),
-          );
-          menu.addItem((item) => {
-            item.setTitle(allExpanded ? t("ui.collapseAll") : t("ui.expandAll"));
-            item.setIcon(allExpanded ? "chevrons-down-up" : "chevrons-up-down");
-            item.onClick(() => {
-              this.toggleExpandedPaths(subtreePaths);
-            });
-          });
-        }
-        menu.addItem((item) => {
-          item.setTitle(t("ui.rename"));
-          item.setIcon("pencil");
-          item.onClick(() => {
-            this.openNameModal(t("ui.rename"), node.name, (name) =>
-              this.run(() => this.options.documents.rename(node.path, name)),
-            );
-          });
-        });
-        menu.addItem((item) => {
-          item.setTitle(t("ui.delete"));
-          item.setIcon("trash-2");
-          item.onClick(() => {
-            this.openTrashModal(node);
-          });
-        });
-        menu.showAtMouseEvent(event);
+        this.showDocumentMenu(node, event);
       }),
     );
 
@@ -255,6 +233,111 @@ export class DocumentTreeView extends ItemView {
     }
 
     return item;
+  }
+
+  private showDocumentMenu(node: DocumentNode, event: MouseEvent): void {
+    const menu = new Menu();
+    const subtreePaths = this.expandablePaths([node]);
+    if (subtreePaths.length > 0) {
+      const allExpanded = subtreePaths.every((path) => this.expanded.has(path));
+      menu.addItem((item) => {
+        item.setTitle(allExpanded ? t("ui.collapseAll") : t("ui.expandAll"));
+        item.setIcon(allExpanded ? "chevrons-down-up" : "chevrons-up-down");
+        item.onClick(() => {
+          this.toggleExpandedPaths(subtreePaths);
+        });
+      });
+      menu.addSeparator();
+    }
+    menu.addItem((item) => {
+      item.setTitle(t("ui.copyRelativePath"));
+      item.setIcon("copy");
+      item.onClick(() => {
+        void this.copyText(node.indexPath);
+      });
+    });
+    menu.addItem((item) => {
+      item.setTitle(t("ui.copyAbsolutePath"));
+      item.setIcon("copy");
+      item.onClick(() => {
+        void this.copyAbsolutePath(node.indexPath);
+      });
+    });
+    menu.addSeparator();
+    menu.addItem((item) => {
+      item.setTitle(t("ui.openWithDefaultApp"));
+      item.setIcon("external-link");
+      item.onClick(() => {
+        void this.openIndexExternally(node.indexPath, "app");
+      });
+    });
+    menu.addItem((item) => {
+      item.setTitle(t("ui.showInSystemExplorer"));
+      item.setIcon("folder-open");
+      item.onClick(() => {
+        void this.openIndexExternally(node.indexPath, "folder");
+      });
+    });
+    menu.addSeparator();
+    menu.addItem((item) => {
+      item.setTitle(t("ui.rename"));
+      item.setIcon("pencil");
+      item.onClick(() => {
+        this.openNameModal(t("ui.rename"), node.name, (name) =>
+          this.run(() => this.options.documents.rename(node.path, name)),
+        );
+      });
+    });
+    menu.addItem((item) => {
+      item.setTitle(t("ui.delete"));
+      item.setIcon("trash-2");
+      item.onClick(() => {
+        this.openTrashModal(node);
+      });
+    });
+    menu.showAtMouseEvent(event);
+  }
+
+  private fileActions(): DesktopFileActions {
+    return this.options.desktop ?? createDesktopFileActions(this.app);
+  }
+
+  private async copyText(text: string): Promise<void> {
+    try {
+      await this.fileActions().copyText(text);
+    } catch {
+      this.options.notice?.(t("notice.copyFailed"));
+    }
+  }
+
+  private async copyAbsolutePath(indexPath: string): Promise<void> {
+    const absolute = this.fileActions().resolveAbsolutePath(indexPath);
+    if (absolute === null) {
+      this.options.notice?.(t("notice.localPathUnavailable"));
+      return;
+    }
+    await this.copyText(absolute);
+  }
+
+  private async openIndexExternally(
+    indexPath: string,
+    mode: "app" | "folder",
+  ): Promise<void> {
+    const actions = this.fileActions();
+    const absolute = actions.resolveAbsolutePath(indexPath);
+    if (absolute === null) {
+      this.options.notice?.(t("notice.localPathUnavailable"));
+      return;
+    }
+    try {
+      if (mode === "app") {
+        await actions.openWithDefaultApp(absolute);
+      } else {
+        await actions.showInSystemExplorer(absolute);
+      }
+    } catch {
+      this.options.notice?.(t("notice.openExternallyFailed"));
+    }
   }
 
   private toggleExpanded(path: string): void {

@@ -8,6 +8,7 @@ import {
 import type { DocumentNode, DocumentService } from "../src/types";
 import { t } from "../src/i18n";
 import { DocumentServiceError } from "../src/services/document-service";
+import type { DesktopFileActions } from "../src/ui/desktop-file-actions";
 
 function node(
   name: string,
@@ -31,6 +32,7 @@ const sampleTree: DocumentNode[] = [
 interface MountOptions {
   nodes?: readonly DocumentNode[];
   documents?: Partial<DocumentService>;
+  desktop?: DesktopFileActions;
 }
 
 async function mount(options: MountOptions = {}) {
@@ -50,6 +52,7 @@ async function mount(options: MountOptions = {}) {
     getNodes: () => nodes,
     requestRefresh,
     notice,
+    desktop: options.desktop,
   });
   await view.onOpen();
   document.body.appendChild(view.contentEl);
@@ -72,13 +75,58 @@ function action(path: string, label: string): HTMLElement {
   return button;
 }
 
+function fakeDesktop(
+  overrides: Partial<DesktopFileActions> = {},
+): DesktopFileActions {
+  return {
+    copyText: vi.fn().mockResolvedValue(undefined),
+    resolveAbsolutePath: vi.fn(
+      (vaultRelativePath: string) => `/abs/${vaultRelativePath}`,
+    ),
+    openWithDefaultApp: vi.fn().mockResolvedValue(undefined),
+    showInSystemExplorer: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+function openMenu(path: string, via: "more" | "contextmenu" = "more"): void {
+  document.querySelector(".menu")?.remove();
+  if (via === "more") {
+    action(path, t("ui.more")).click();
+    return;
+  }
+  const event = new MouseEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+  });
+  nodeRow(path).dispatchEvent(event);
+}
+
 function menuItem(path: string, label: string): HTMLElement {
-  action(path, t("ui.more")).click();
+  openMenu(path);
   const item = document.querySelector(`.menu [aria-label="${label}"]`);
   if (!(item instanceof HTMLElement)) {
     throw new Error(`missing menu item ${label} for ${path}`);
   }
   return item;
+}
+
+function menuLabels(): string[] {
+  return [...document.querySelectorAll(".menu [aria-label]")].map(
+    (el) => el.getAttribute("aria-label") ?? "",
+  );
+}
+
+function menuStructure(): string[] {
+  const menu = document.querySelector(".menu");
+  if (menu === null) {
+    throw new Error("menu missing");
+  }
+  return [...menu.children].map((el) =>
+    el.classList.contains("menu-separator")
+      ? "separator"
+      : (el.getAttribute("aria-label") ?? ""),
+  );
 }
 
 function toolbar(label: string): HTMLElement {
@@ -382,18 +430,122 @@ describe("DocumentTreeView", () => {
     expect(toolbar(t("ui.expandAll"))).toBeTruthy();
   });
 
-  it("omits expand and collapse from the more menu when a document has no children", async () => {
+  it("keeps more and new-child buttons and opens the same menu from the row context menu", async () => {
     await mount();
-    action("Inbox", t("ui.more")).click();
-    expect(
-      document.querySelector(`.menu [aria-label="${t("ui.expandAll")}"]`),
-    ).toBeNull();
-    expect(
-      document.querySelector(`.menu [aria-label="${t("ui.collapseAll")}"]`),
-    ).toBeNull();
-    expect(
-      document.querySelector(`.menu [aria-label="${t("ui.rename")}"]`),
-    ).toBeInstanceOf(HTMLButtonElement);
+    expect(action("Work", t("command.newChildDocument"))).toBeInstanceOf(
+      HTMLButtonElement,
+    );
+    expect(action("Work", t("ui.more"))).toBeInstanceOf(HTMLButtonElement);
+    openMenu("Work", "more");
+    const fromMore = menuStructure();
+    openMenu("Work", "contextmenu");
+    expect(menuStructure()).toEqual(fromMore);
+    expect(fromMore).toEqual([
+      t("ui.expandAll"),
+      "separator",
+      t("ui.copyRelativePath"),
+      t("ui.copyAbsolutePath"),
+      "separator",
+      t("ui.openWithDefaultApp"),
+      t("ui.showInSystemExplorer"),
+      "separator",
+      t("ui.rename"),
+      t("ui.delete"),
+    ]);
+  });
+
+  it("omits expand-all and the leading separator when a document has no children", async () => {
+    await mount();
+    openMenu("Inbox", "more");
+    expect(menuStructure()).toEqual([
+      t("ui.copyRelativePath"),
+      t("ui.copyAbsolutePath"),
+      "separator",
+      t("ui.openWithDefaultApp"),
+      t("ui.showInSystemExplorer"),
+      "separator",
+      t("ui.rename"),
+      t("ui.delete"),
+    ]);
+  });
+
+  it("copies the index.md vault-relative path", async () => {
+    const desktop = fakeDesktop();
+    await mount({ desktop });
+    menuItem("Work/Notes", t("ui.copyRelativePath")).click();
+    await flush();
+    expect(desktop.copyText).toHaveBeenCalledWith("Work/Notes/index.md");
+  });
+
+  it("copies the index.md absolute path from the desktop helper", async () => {
+    const desktop = fakeDesktop();
+    await mount({ desktop });
+    menuItem("Work", t("ui.copyAbsolutePath")).click();
+    await flush();
+    expect(desktop.resolveAbsolutePath).toHaveBeenCalledWith("Work/index.md");
+    expect(desktop.copyText).toHaveBeenCalledWith("/abs/Work/index.md");
+  });
+
+  it("opens index.md with the default app and in the system explorer", async () => {
+    const desktop = fakeDesktop();
+    await mount({ desktop });
+    menuItem("Work", t("ui.openWithDefaultApp")).click();
+    await flush();
+    expect(desktop.openWithDefaultApp).toHaveBeenCalledWith("/abs/Work/index.md");
+    menuItem("Work", t("ui.showInSystemExplorer")).click();
+    await flush();
+    expect(desktop.showInSystemExplorer).toHaveBeenCalledWith(
+      "/abs/Work/index.md",
+    );
+  });
+
+  it("notices clipboard and missing-path failures without refreshing", async () => {
+    const desktop = fakeDesktop({
+      copyText: vi.fn().mockRejectedValue(new Error("denied")),
+      resolveAbsolutePath: vi.fn(() => null),
+    });
+    const { notice, requestRefresh } = await mount({ desktop });
+    menuItem("Work", t("ui.copyRelativePath")).click();
+    await flush();
+    expect(notice).toHaveBeenCalledWith(t("notice.copyFailed"));
+    menuItem("Work", t("ui.copyAbsolutePath")).click();
+    await flush();
+    expect(notice).toHaveBeenCalledWith(t("notice.localPathUnavailable"));
+    menuItem("Work", t("ui.openWithDefaultApp")).click();
+    await flush();
+    expect(notice).toHaveBeenCalledWith(t("notice.localPathUnavailable"));
+    menuItem("Work", t("ui.showInSystemExplorer")).click();
+    await flush();
+    expect(notice).toHaveBeenCalledWith(t("notice.localPathUnavailable"));
+    expect(requestRefresh).not.toHaveBeenCalled();
+  });
+
+  it("notices when the default app fails after a path is resolved", async () => {
+    const desktop = fakeDesktop({
+      openWithDefaultApp: vi.fn().mockRejectedValue(new Error("no app")),
+    });
+    const { notice, requestRefresh } = await mount({ desktop });
+    menuItem("Work", t("ui.openWithDefaultApp")).click();
+    await flush();
+    expect(notice).toHaveBeenCalledWith(t("notice.openExternallyFailed"));
+    expect(requestRefresh).not.toHaveBeenCalled();
+  });
+
+  it("does not open a parent menu when right-clicking a child row", async () => {
+    await mount();
+    const event = new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+    });
+    expect(nodeRow("Work/Notes").dispatchEvent(event)).toBe(false);
+    expect(menuLabels()).toEqual([
+      t("ui.copyRelativePath"),
+      t("ui.copyAbsolutePath"),
+      t("ui.openWithDefaultApp"),
+      t("ui.showInSystemExplorer"),
+      t("ui.rename"),
+      t("ui.delete"),
+    ]);
   });
 
   it("keeps expand and selection after a refresh when nodes still exist", async () => {
