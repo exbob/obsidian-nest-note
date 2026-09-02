@@ -174,6 +174,14 @@ export function createEl<K extends keyof HTMLElementTagNameMap>(
 
 (globalThis as unknown as { createEl: typeof createEl }).createEl = createEl;
 
+export class FileSystemAdapter {
+  constructor(private readonly basePath = "") {}
+
+  getFullPath(normalizedPath: string): string {
+    const prefix = this.basePath === "" ? "" : `${this.basePath}/`;
+    return `${prefix}${normalizedPath}`;
+  }
+}
 
 export class MenuItem {
   title = "";
@@ -196,13 +204,22 @@ export class MenuItem {
   }
 }
 
+type MenuEntry =
+  | { kind: "item"; item: MenuItem }
+  | { kind: "separator" };
+
 export class Menu {
-  private readonly items: MenuItem[] = [];
+  private readonly entries: MenuEntry[] = [];
 
   addItem(cb: (item: MenuItem) => unknown): this {
     const item = new MenuItem();
     cb(item);
-    this.items.push(item);
+    this.entries.push({ kind: "item", item });
+    return this;
+  }
+
+  addSeparator(): this {
+    this.entries.push({ kind: "separator" });
     return this;
   }
 
@@ -210,15 +227,21 @@ export class Menu {
     document.querySelector(".menu")?.remove();
     const menu = document.createElement("div");
     menu.className = "menu";
-    for (const item of this.items) {
+    for (const entry of this.entries) {
+      if (entry.kind === "separator") {
+        const separator = document.createElement("div");
+        separator.className = "menu-separator";
+        menu.append(separator);
+        continue;
+      }
       const button = document.createElement("button");
       button.type = "button";
-      button.setAttribute("aria-label", item.title);
-      if (item.icon !== "") {
-        button.dataset.icon = item.icon;
+      button.setAttribute("aria-label", entry.item.title);
+      if (entry.item.icon !== "") {
+        button.dataset.icon = entry.item.icon;
       }
       button.addEventListener("click", (event) => {
-        item.clickHandler?.(event);
+        entry.item.clickHandler?.(event);
       });
       menu.append(button);
     }
