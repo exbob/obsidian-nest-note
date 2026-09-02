@@ -18,17 +18,20 @@ export function absolutePathFromAdapter(
   return null;
 }
 
-function electronShell(): {
-  openPath(path: string): Promise<string>;
-  showItemInFolder(path: string): void;
-} {
-  const electron = require("electron") as {
-    shell: {
-      openPath(path: string): Promise<string>;
-      showItemInFolder(path: string): void;
-    };
+type ElectronModule = {
+  shell: {
+    openPath(path: string): Promise<string>;
+    showItemInFolder(path: string): void;
   };
-  return electron.shell;
+};
+
+function electronShell(): ElectronModule["shell"] {
+  const requireFn = (globalThis as { require?: (id: string) => ElectronModule })
+    .require;
+  if (typeof requireFn !== "function") {
+    throw new Error("Electron is not available");
+  }
+  return requireFn("electron").shell;
 }
 
 export function createDesktopFileActions(app: App): DesktopFileActions {

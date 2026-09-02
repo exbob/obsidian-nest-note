@@ -4,7 +4,12 @@ import { absolutePathFromAdapter } from "../src/ui/desktop-file-actions";
 
 describe("absolutePathFromAdapter", () => {
   it("returns getFullPath when the adapter is a FileSystemAdapter", () => {
-    const adapter = new FileSystemAdapter("C:/vault");
+    const adapter = Object.create(
+      FileSystemAdapter.prototype,
+    ) as FileSystemAdapter;
+    Object.defineProperty(adapter, "getFullPath", {
+      value: (normalizedPath: string) => `C:/vault/${normalizedPath}`,
+    });
     expect(absolutePathFromAdapter(adapter, "Work/index.md")).toBe(
       "C:/vault/Work/index.md",
     );
