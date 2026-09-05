@@ -1,0 +1,4 @@
+{
+  "name": "NestNote",
+  "install": "npm ci"
+}
