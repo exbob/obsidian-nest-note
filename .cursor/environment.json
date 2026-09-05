@@ -1,4 +1,4 @@
 {
   "name": "NestNote",
-  "install": "npm ci"
+  "install": "cd /agent/repos/obsidian-nest-note && npm ci"
 }
