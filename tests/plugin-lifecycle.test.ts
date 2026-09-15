@@ -7,7 +7,7 @@ import {
   DEFAULT_NESTNOTE_SETTINGS,
   type NestNoteSettings,
 } from "../src/settings";
-import { VIEW_TYPE_NESTNOTE } from "../src/ui/document-tree-view";
+import { NESTNOTE_ICON, VIEW_TYPE_NESTNOTE } from "../src/ui/document-tree-view";
 
 interface NoticeHarness {
   messages: string[];
@@ -567,7 +567,7 @@ describe("NestNotePlugin assembly", () => {
     expect(plugin.manifest.minAppVersion).toBe("1.7.2");
     expect(harness(plugin).views.has(VIEW_TYPE_NESTNOTE)).toBe(true);
     expect(harness(plugin).ribbonIcons).toEqual([
-      expect.objectContaining({ title: "NestNote" }),
+      expect.objectContaining({ icon: NESTNOTE_ICON, title: "NestNote" }),
     ]);
     expect(harness(plugin).commands.map((entry) => entry.id).sort()).toEqual(
       [...COMMAND_IDS].sort(),

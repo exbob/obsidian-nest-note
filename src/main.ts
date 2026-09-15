@@ -43,6 +43,7 @@ import {
 import type { DocumentNode, DocumentService, VaultEntry } from "./types";
 import {
   DocumentTreeView,
+  NESTNOTE_ICON,
   VIEW_TYPE_NESTNOTE,
 } from "./ui/document-tree-view";
 import {
@@ -126,7 +127,7 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
         }),
     );
 
-    this.addRibbonIcon("folder-tree", "NestNote", () => {
+    this.addRibbonIcon(NESTNOTE_ICON, "NestNote", () => {
       this.openDocumentTree();
     });
 

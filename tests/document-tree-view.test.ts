@@ -3,6 +3,7 @@ import type { WorkspaceLeaf } from "obsidian";
 import {
   DocumentTreeView,
   NESTNOTE_DOCUMENT_DRAG_MIME,
+  NESTNOTE_ICON,
   VIEW_TYPE_NESTNOTE,
 } from "../src/ui/document-tree-view";
 import type { DocumentNode, DocumentService } from "../src/types";
@@ -232,6 +233,8 @@ describe("DocumentTreeView", () => {
     expect(view.getViewType()).toBe(VIEW_TYPE_NESTNOTE);
     expect(view.getViewType()).toBe("nestnote-document-tree");
     expect(view.getDisplayText()).toBe("NestNote");
+    expect(view.getIcon()).toBe(NESTNOTE_ICON);
+    expect(view.getIcon()).toBe("notebook");
   });
 
   it("renders each document name in a nested tree", async () => {

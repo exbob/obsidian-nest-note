@@ -8,6 +8,8 @@ import { createDesktopFileActions } from "./desktop-file-actions";
 
 export const VIEW_TYPE_NESTNOTE = "nestnote-document-tree";
 
+export const NESTNOTE_ICON = "notebook";
+
 export const NESTNOTE_DOCUMENT_DRAG_MIME =
   "application/x-nestnote-document-path";
 
@@ -42,7 +44,7 @@ export class DocumentTreeView extends ItemView {
   }
 
   getIcon(): string {
-    return "folder-tree";
+    return NESTNOTE_ICON;
   }
 
   async onOpen(): Promise<void> {
