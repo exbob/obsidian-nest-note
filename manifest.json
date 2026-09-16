@@ -1,7 +1,7 @@
 {
   "id": "nest-note",
   "name": "NestNote",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "minAppVersion": "1.7.2",
   "description": "Treat folders as nested documents.",
   "author": "LiShaocheng",
