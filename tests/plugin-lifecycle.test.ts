@@ -1237,6 +1237,23 @@ created: 2020-01-01T00:00:00Z
     expect(app.workspace.opened).toContain("Work/index.md");
   });
 
+  it("activates the editor leaf after open so outline can follow the file", async () => {
+    vi.useFakeTimers();
+    const app = createApp();
+    const plugin = loadPlugin(app);
+    await plugin.onload();
+    app.workspace.markReady();
+    await settle();
+
+    command(plugin, "nestnote:new-document")();
+    await confirmNameModal("Work");
+    await settle();
+
+    expect(app.workspace.opened).toContain("Work/index.md");
+    expect(app.workspace.setActiveLeafCalls.length).toBeGreaterThan(0);
+    expect(app.workspace.setActiveLeafFocusArgs).toEqual([{ focus: false }]);
+  });
+
   it("reveals the new document in an open NestNote pane", async () => {
     vi.useFakeTimers();
     const app = createApp();

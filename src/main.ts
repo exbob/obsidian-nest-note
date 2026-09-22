@@ -487,7 +487,9 @@ function wrapWorkspaceLeaf(app: App, leaf: WorkspaceLeaf): DocumentWorkspaceLeaf
   return {
     openFile: async (file) => {
       const found = requireFile(app, file.path);
-      await leaf.openFile(found);
+      // Active (not focused) so Outline follows the opened file after a NestNote click.
+      await leaf.openFile(found, { active: true });
+      app.workspace.setActiveLeaf(leaf, { focus: false });
     },
     getViewType: () => leaf.view.getViewType(),
   };
