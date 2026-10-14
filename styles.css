@@ -161,3 +161,75 @@ button.nestnote-icon-button:disabled:hover {
 .nestnote-tree.is-drop-root {
   box-shadow: inset 0 0 0 1px var(--interactive-accent);
 }
+
+.nestnote-files-pathbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.nestnote-files-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.nestnote-files-body {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 0 10px;
+}
+
+.nestnote-files-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.nestnote-files-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  user-select: none;
+}
+
+.nestnote-files-row:hover {
+  background-color: var(--nav-item-background-hover);
+}
+
+.nestnote-files-row.is-selected {
+  background-color: var(--nav-item-background-active);
+  color: var(--nav-item-color-active);
+}
+
+.nestnote-files-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+}
+
+.nestnote-files-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nestnote-files-empty {
+  padding: 16px 12px;
+  color: var(--text-faint);
+  text-align: center;
+}
