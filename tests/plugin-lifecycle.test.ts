@@ -651,6 +651,9 @@ describe("NestNotePlugin assembly", () => {
       maxChildDepth: 2,
       openPanelOnStartup: false,
       autoFixDocumentFormat: true,
+      openFileExplorerOnStartup: true,
+      fileExplorerSide: "right",
+      fileExplorerRoot: "files",
     });
   });
 

@@ -18,6 +18,9 @@ describe("normalizeNestNoteSettings", () => {
       maxChildDepth: 5,
       openPanelOnStartup: true,
       autoFixDocumentFormat: true,
+      openFileExplorerOnStartup: true,
+      fileExplorerSide: "right",
+      fileExplorerRoot: "files",
     });
   });
 
@@ -32,6 +35,37 @@ describe("normalizeNestNoteSettings", () => {
       maxChildDepth: 9,
       openPanelOnStartup: false,
       autoFixDocumentFormat: false,
+      openFileExplorerOnStartup: true,
+      fileExplorerSide: "right",
+      fileExplorerRoot: "files",
+    });
+  });
+
+  it("falls back invalid file explorer fields", () => {
+    expect(
+      normalizeNestNoteSettings({
+        fileExplorerSide: "top",
+        fileExplorerRoot: "../x",
+        openFileExplorerOnStartup: "yes",
+      }),
+    ).toMatchObject({
+      openFileExplorerOnStartup: true,
+      fileExplorerSide: "right",
+      fileExplorerRoot: "files",
+    });
+  });
+
+  it("keeps valid file explorer fields", () => {
+    expect(
+      normalizeNestNoteSettings({
+        openFileExplorerOnStartup: false,
+        fileExplorerSide: "left",
+        fileExplorerRoot: "assets",
+      }),
+    ).toMatchObject({
+      openFileExplorerOnStartup: false,
+      fileExplorerSide: "left",
+      fileExplorerRoot: "assets",
     });
   });
 
@@ -50,6 +84,9 @@ describe("normalizeNestNoteSettings", () => {
       maxChildDepth: 0,
       openPanelOnStartup: true,
       autoFixDocumentFormat: true,
+      openFileExplorerOnStartup: true,
+      fileExplorerSide: "right",
+      fileExplorerRoot: "files",
     });
   });
 
@@ -63,6 +100,9 @@ describe("normalizeNestNoteSettings", () => {
       maxChildDepth: 3,
       openPanelOnStartup: false,
       autoFixDocumentFormat: true,
+      openFileExplorerOnStartup: true,
+      fileExplorerSide: "right",
+      fileExplorerRoot: "files",
     });
   });
 });
