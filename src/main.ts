@@ -78,6 +78,7 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
   private fileExplorerService!: NestNoteFileExplorerService;
   private explorerSide: NestNoteSettings["fileExplorerSide"] =
     DEFAULT_NESTNOTE_SETTINGS.fileExplorerSide;
+  private explorerRoot: string = DEFAULT_NESTNOTE_SETTINGS.fileExplorerRoot;
   private stopped = false;
 
   async onload(): Promise<void> {
@@ -87,6 +88,7 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
       this.settings = { ...DEFAULT_NESTNOTE_SETTINGS };
     }
     this.explorerSide = this.settings.fileExplorerSide;
+    this.explorerRoot = this.settings.fileExplorerRoot;
     this.addSettingTab(new NestNoteSettingTab(this.app, this));
 
     const notify = (message: string): void => {
@@ -164,9 +166,8 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
           desktop,
           notice: notify,
           getEditorInsert: () => {
-            const view =
-              this.app.workspace.getActiveViewOfType(MarkdownView);
-            if (view === null || view === undefined) {
+            const view = this.findMarkdownView();
+            if (view === null) {
               return null;
             }
             return (text: string) => {
@@ -266,13 +267,35 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
     void this.scanAndSync();
     const sideChanged = this.settings.fileExplorerSide !== this.explorerSide;
     this.explorerSide = this.settings.fileExplorerSide;
+    const rootChanged = this.settings.fileExplorerRoot !== this.explorerRoot;
+    this.explorerRoot = this.settings.fileExplorerRoot;
     if (sideChanged) {
       void this.migrateFileExplorer().catch((error) => {
         new Notice(errorMessage(error));
       });
     } else {
-      this.refreshExplorers(true);
+      this.refreshExplorers(rootChanged);
     }
+  }
+
+  /** 资源管理器获得焦点时 active view 不是编辑器，需回退到最近的 Markdown 叶子。 */
+  private findMarkdownView(): MarkdownView | null {
+    const workspace = this.app.workspace;
+    const active = workspace.getActiveViewOfType(MarkdownView);
+    if (active !== null && active !== undefined) {
+      return active;
+    }
+    const recent = workspace.getMostRecentLeaf();
+    if (recent?.view instanceof MarkdownView) {
+      return recent.view;
+    }
+    let found: MarkdownView | null = null;
+    workspace.iterateRootLeaves((leaf) => {
+      if (found === null && leaf.view instanceof MarkdownView) {
+        found = leaf.view;
+      }
+    });
+    return found;
   }
 
   private async initializeAfterLayout(): Promise<void> {

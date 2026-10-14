@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { App, PluginManifest, WorkspaceLeaf } from "obsidian";
-import { Notice } from "obsidian";
+import { MarkdownView, Notice } from "obsidian";
 import { t } from "../src/i18n";
 import NestNotePlugin from "../src/main";
 import {
@@ -1807,6 +1807,50 @@ created: 2020-01-01T00:00:00Z
       const insert = view.options.getEditorInsert();
       expect(insert?.("[[x]]")).toBe(true);
       expect(replaceSelection).toHaveBeenCalledWith("[[x]]");
+    });
+
+    it("inserts into a markdown leaf when the explorer is the active leaf", async () => {
+      const app = createApp();
+      const plugin = loadPlugin(app);
+      await plugin.onload();
+      const markdownLeaf = app.workspace.getLeaf(true);
+      const markdownView = new MarkdownView(markdownLeaf as never);
+      const replaceSelection = vi.fn();
+      markdownView.editor = { replaceSelection } as never;
+      markdownLeaf.view = markdownView as never;
+      await plugin.activateFileExplorerView();
+      const view = explorerLeaves(app)[0]!.view as unknown as {
+        options: { getEditorInsert(): ((text: string) => boolean) | null };
+      };
+
+      // active view is the explorer (not Markdown) and it is the most recent leaf
+      expect(app.workspace.activeMarkdownView).toBeNull();
+      expect(app.workspace.getMostRecentLeaf()).toBe(explorerLeaves(app)[0]);
+
+      const insert = view.options.getEditorInsert();
+      expect(insert).not.toBeNull();
+      expect(insert?.("![[a.png]]")).toBe(true);
+      expect(replaceSelection).toHaveBeenCalledWith("![[a.png]]");
+    });
+
+    it("resets explorer paths on settings change only when the root name changes", async () => {
+      const app = createApp();
+      const plugin = loadPlugin(app, { openFileExplorerOnStartup: false });
+      await plugin.onload();
+      await plugin.activateFileExplorerView();
+      const refresh = spyRefresh(explorerLeaves(app)[0]!);
+
+      plugin.settings.maxChildDepth = 2;
+      plugin.onSettingsChanged();
+      expect(refresh).toHaveBeenLastCalledWith(false);
+
+      plugin.settings.fileExplorerRoot = "assets";
+      plugin.onSettingsChanged();
+      expect(refresh).toHaveBeenLastCalledWith(true);
+
+      plugin.settings.maxChildDepth = 3;
+      plugin.onSettingsChanged();
+      expect(refresh).toHaveBeenLastCalledWith(false);
     });
   });
 
