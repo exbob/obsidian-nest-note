@@ -6,6 +6,7 @@ export const en: Record<MessageKey, string> = {
   "command.newChildDocument": "New child document",
   "command.refresh": "Refresh",
   "command.archiveCurrentAttachment": "Archive current attachment",
+  "command.openFileExplorer": "Open file explorer",
   "setting.maxChildDepthName": "Max child document depth",
   "setting.maxChildDepthDesc": "Root documents are depth 0. Allowed range: 0–9.",
   "setting.openPanelOnStartupName": "Open the NestNote pane on startup",
@@ -14,6 +15,21 @@ export const en: Record<MessageKey, string> = {
   "setting.autoFixDocumentFormatName": "Auto-fix document format",
   "setting.autoFixDocumentFormatDesc":
     "During scans, fill missing header fields and child-link markers, and rewrite the child list to the canonical format. When off, parent links update only when you create, delete, rename, or move a child document.",
+  "setting.fileExplorerHeading": "File explorer",
+  "setting.openFileExplorerOnStartupName":
+    "Open file explorer panel on startup",
+  "setting.openFileExplorerOnStartupDesc":
+    "Applies on the next launch; does not close a panel that is already open. Independent of opening the NestNote pane on startup.",
+  "setting.fileExplorerSideName": "Pane position",
+  "setting.fileExplorerSideDesc":
+    "Show the file explorer in the left or right sidebar.",
+  "setting.fileExplorerSideLeft": "Left",
+  "setting.fileExplorerSideRight": "Right",
+  "setting.fileExplorerRootName": "Assets folder in document",
+  "setting.fileExplorerRootDesc":
+    "Folder name relative to the document directory; default is files.",
+  "setting.fileExplorerRootInvalid":
+    "Invalid assets folder name; restored the default.",
   "setting.maxChildDepthInvalid":
     "Max child document depth must be an integer from 0 to 9",
   "setting.saveFailed":
@@ -31,10 +47,22 @@ export const en: Record<MessageKey, string> = {
   "ui.delete": "Delete",
   "ui.confirm": "Confirm",
   "ui.cancel": "Cancel",
+  "ui.copy": "Copy",
   "ui.documentName": "Document name",
   "ui.deleteDocument": "Delete document",
   "ui.deleteConfirm":
     'Deleting "{name}" will move the entire subtree to the trash.',
+  "ui.deleteFile": "Delete",
+  "ui.deleteFileConfirm": 'Move "{name}" to the trash?',
+  "ui.deleteFileConfirmLinked":
+    '"{name}" is still referenced in this document. Move it to the trash anyway?',
+  "ui.fileExplorer": "File explorer",
+  "ui.fileExplorerNeedDocument": "Open a NestNote document",
+  "ui.fileExplorerEmpty": "This folder is empty",
+  "ui.fileExplorerError": "Could not load the assets folder",
+  "ui.fileExplorerGoUp": "Up",
+  "ui.insertIntoDocument": "Insert into document",
+  "ui.paste": "Paste",
   "ui.childrenHeading": "Child Document",
   "notice.openChildRequiresDocument":
     "Open a NestNote document before creating a child document",
@@ -45,8 +73,17 @@ export const en: Record<MessageKey, string> = {
   "notice.metadataUnchanged":
     "Document metadata is invalid; no changes were written: {detail}",
   "notice.copyFailed": "Could not copy to the clipboard",
+  "notice.clipboardFilesUnavailable":
+    "No files available to paste from the system clipboard",
+  "notice.deleteFailed": "Could not delete this file",
+  "notice.fileExplorerRootCreateFailed": "Could not create the assets folder",
+  "notice.insertRequiresEditor":
+    "Place the cursor in the Markdown editor first",
   "notice.localPathUnavailable": "Could not get the local path for this file",
   "notice.openExternallyFailed": "Could not open this file with the system",
+  "notice.pasteConflict":
+    "A file or folder with the same name already exists at the destination",
+  "notice.pasteFailed": "Could not paste the file",
   "error.targetExists": "Target already exists: {path}",
   "error.maxDepthReached": "Maximum child document depth reached ({max})",
   "error.documentNotFound": "Document not found: {path}",
