@@ -8,6 +8,10 @@ import {
   type NestNoteSettings,
 } from "../src/settings";
 import { NESTNOTE_ICON, VIEW_TYPE_NESTNOTE } from "../src/ui/document-tree-view";
+import {
+  VIEW_TYPE_NESTNOTE_FILES,
+  type FileExplorerView,
+} from "../src/ui/file-explorer-view";
 
 interface NoticeHarness {
   messages: string[];
@@ -23,6 +27,7 @@ const COMMAND_IDS = [
   "nestnote:new-child-document",
   "nestnote:refresh",
   "nestnote:archive-current-attachment",
+  "nestnote:open-file-explorer",
 ] as const;
 
 interface FileRef {
@@ -215,6 +220,8 @@ class FakeWorkspace {
   readonly leaves: FakeLeaf[] = [];
   readonly revealCalls: FakeLeaf[] = [];
   readonly setActiveLeafCalls: FakeLeaf[] = [];
+  readonly detachCalls: FakeLeaf[] = [];
+  activeMarkdownView: unknown = null;
   private readonly readyCallbacks: Array<() => unknown> = [];
   getViewCreator: ((type: string) => ((leaf: WorkspaceLeaf) => unknown) | undefined) | undefined;
   getRightLeafSplits: boolean[] = [];
@@ -268,6 +275,10 @@ class FakeWorkspace {
 
   getActiveFile(): FileRef | null {
     return this.activeFile;
+  }
+
+  getActiveViewOfType(_type: unknown): unknown {
+    return this.activeMarkdownView;
   }
 
   getLeaf(newLeaf?: boolean): FakeLeaf {
@@ -367,6 +378,20 @@ class FakeLeaf {
 
   async openFile(file: { path: string }): Promise<void> {
     this.workspace.opened.push(file.path);
+  }
+
+  detach(): void {
+    this.workspace.detachCalls.push(this);
+    for (const list of [
+      this.workspace.leaves,
+      this.workspace.leftSidebarLeaves,
+      this.workspace.rightSidebarLeaves,
+    ]) {
+      const index = list.indexOf(this);
+      if (index !== -1) {
+        list.splice(index, 1);
+      }
+    }
   }
 }
 
@@ -541,6 +566,12 @@ function clickTrashFromMore(path: string): void {
     throw new Error("trash action missing");
   }
   trash.click();
+}
+
+async function settle2(): Promise<void> {
+  for (let i = 0; i < 6; i++) {
+    await Promise.resolve();
+  }
 }
 
 async function settle(): Promise<void> {
@@ -1572,6 +1603,211 @@ created: 2020-01-01T00:00:00Z
 
     const rendered = document.querySelector('[data-path="Inbox"]');
     expect(rendered).not.toBeNull();
+  });
+
+  describe("file explorer wiring", () => {
+    function explorerLeaves(app: FakeApp): FakeLeaf[] {
+      return app.workspace.getLeavesOfType(VIEW_TYPE_NESTNOTE_FILES);
+    }
+
+    function spyRefresh(leaf: FakeLeaf): ReturnType<typeof vi.fn> {
+      const view = leaf.view as unknown as FileExplorerView;
+      const spy = vi.fn().mockResolvedValue(undefined);
+      view.refresh = spy as unknown as FileExplorerView["refresh"];
+      return spy;
+    }
+
+    function seedWork(vault: FakeVault, workspace: FakeWorkspace): void {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+      workspace.activeFile = fileRef("Work/index.md");
+    }
+
+    it("registers the explorer view and opens it in the right sidebar via command", async () => {
+      const app = createApp();
+      const plugin = loadPlugin(app);
+      await plugin.onload();
+      expect(harness(plugin).views.has(VIEW_TYPE_NESTNOTE_FILES)).toBe(true);
+
+      command(plugin, "nestnote:open-file-explorer")();
+      await settle2();
+
+      expect(explorerLeaves(app)).toHaveLength(1);
+      expect(app.workspace.getRightLeafSplits).toEqual([false]);
+      expect(app.workspace.getLeftLeafSplits).toEqual([]);
+      const first = app.workspace.revealCalls[0];
+
+      command(plugin, "nestnote:open-file-explorer")();
+      await settle2();
+      expect(explorerLeaves(app)).toHaveLength(1);
+      expect(app.workspace.revealCalls[1]).toBe(first);
+    });
+
+    it("uses the left sidebar when configured", async () => {
+      const app = createApp();
+      const plugin = loadPlugin(app, { fileExplorerSide: "left" });
+      await plugin.onload();
+
+      await plugin.activateFileExplorerView();
+
+      expect(explorerLeaves(app)).toHaveLength(1);
+      expect(app.workspace.getRightLeafSplits).toEqual([]);
+      expect(app.workspace.getLeftLeafSplits).toEqual([false]);
+    });
+
+    it("notices when opening the explorer from the command fails", async () => {
+      const app = createApp();
+      const plugin = loadPlugin(app);
+      await plugin.onload();
+      noticeHarness().messages = [];
+      vi.spyOn(plugin, "activateFileExplorerView").mockRejectedValue(
+        new Error("explorer failed"),
+      );
+
+      command(plugin, "nestnote:open-file-explorer")();
+      await settle2();
+
+      expect(
+        noticeHarness().messages.some((m) => m.includes("explorer failed")),
+      ).toBe(true);
+    });
+
+    it("opens the explorer on startup by default and respects the disabled setting", async () => {
+      vi.useFakeTimers();
+      const enabled = createApp();
+      const enabledPlugin = loadPlugin(enabled);
+      await enabledPlugin.onload();
+      expect(explorerLeaves(enabled)).toHaveLength(0);
+      enabled.workspace.markReady();
+      await settle();
+      expect(explorerLeaves(enabled)).toHaveLength(1);
+
+      const disabled = createApp();
+      const disabledPlugin = loadPlugin(disabled, {
+        openFileExplorerOnStartup: false,
+      });
+      await disabledPlugin.onload();
+      disabled.workspace.markReady();
+      await settle();
+      expect(explorerLeaves(disabled)).toHaveLength(0);
+    });
+
+    it("notices when the startup explorer cannot be opened", async () => {
+      vi.useFakeTimers();
+      const app = createApp();
+      const plugin = loadPlugin(app);
+      await plugin.onload();
+      vi.spyOn(plugin, "activateFileExplorerView").mockRejectedValue(
+        new Error("startup explorer failed"),
+      );
+      noticeHarness().messages = [];
+
+      app.workspace.markReady();
+      await settle();
+
+      expect(
+        noticeHarness().messages.some((m) =>
+          m.includes("startup explorer failed"),
+        ),
+      ).toBe(true);
+    });
+
+    it("resets explorer paths on file-open and non-explorer active-leaf-change", async () => {
+      const app = createApp(seedWork);
+      const plugin = loadPlugin(app);
+      await plugin.onload();
+      await plugin.activateFileExplorerView();
+      const leaf = explorerLeaves(app)[0]!;
+      const refresh = spyRefresh(leaf);
+
+      app.workspace.emit("file-open", fileRef("Work/index.md"));
+      expect(refresh).toHaveBeenLastCalledWith(true);
+
+      refresh.mockClear();
+      app.workspace.emit("active-leaf-change", new FakeLeaf(app.workspace));
+      expect(refresh).toHaveBeenCalledWith(true);
+
+      refresh.mockClear();
+      app.workspace.emit("active-leaf-change", leaf);
+      expect(refresh).not.toHaveBeenCalled();
+    });
+
+    it("refreshes explorers without resetting path when vault changes hit the active resource root", async () => {
+      vi.useFakeTimers();
+      const app = createApp(seedWork);
+      const plugin = loadPlugin(app, { openFileExplorerOnStartup: false });
+      await plugin.onload();
+      app.workspace.markReady();
+      await settle();
+      await plugin.activateFileExplorerView();
+      const refresh = spyRefresh(explorerLeaves(app)[0]!);
+
+      app.vault.emit("create", fileRef("Work/files/a.txt"));
+      await settle();
+      expect(refresh).toHaveBeenCalledWith(false);
+
+      refresh.mockClear();
+      app.vault.emit("create", fileRef("Other/files/a.txt"));
+      await settle();
+      expect(refresh).not.toHaveBeenCalled();
+    });
+
+    it("migrates an open explorer when the pane side changes", async () => {
+      vi.useFakeTimers();
+      const app = createApp();
+      const plugin = loadPlugin(app, { openFileExplorerOnStartup: false });
+      await plugin.onload();
+      await plugin.activateFileExplorerView();
+      const original = explorerLeaves(app)[0]!;
+      expect(app.workspace.rightSidebarLeaves).toContain(original);
+
+      plugin.settings.fileExplorerSide = "left";
+      plugin.onSettingsChanged();
+      await settle();
+
+      expect(app.workspace.detachCalls).toContain(original);
+      const leaves = explorerLeaves(app);
+      expect(leaves).toHaveLength(1);
+      expect(app.workspace.leftSidebarLeaves).toContain(leaves[0]);
+    });
+
+    it("does not open an explorer when the side changes while none is open", async () => {
+      vi.useFakeTimers();
+      const app = createApp();
+      const plugin = loadPlugin(app, { openFileExplorerOnStartup: false });
+      await plugin.onload();
+
+      plugin.settings.fileExplorerSide = "left";
+      plugin.onSettingsChanged();
+      await settle();
+
+      expect(explorerLeaves(app)).toHaveLength(0);
+    });
+
+    it("inserts text through the active markdown editor", async () => {
+      const app = createApp();
+      const plugin = loadPlugin(app);
+      await plugin.onload();
+      await plugin.activateFileExplorerView();
+      const view = explorerLeaves(app)[0]!.view as unknown as {
+        options: { getEditorInsert(): ((text: string) => boolean) | null };
+      };
+
+      expect(view.options.getEditorInsert()).toBeNull();
+
+      const replaceSelection = vi.fn();
+      app.workspace.activeMarkdownView = { editor: { replaceSelection } };
+      const insert = view.options.getEditorInsert();
+      expect(insert?.("[[x]]")).toBe(true);
+      expect(replaceSelection).toHaveBeenCalledWith("[[x]]");
+    });
   });
 
   it("stops event listeners and timers on unload", async () => {

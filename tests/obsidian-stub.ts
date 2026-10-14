@@ -92,6 +92,10 @@ export class ItemView {
   }
 }
 
+export class MarkdownView {
+  editor = { replaceSelection(_text: string): void {} };
+}
+
 export class Modal {
   app: unknown;
   contentEl: HTMLElement;

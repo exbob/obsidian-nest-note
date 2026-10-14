@@ -1,4 +1,4 @@
-import { Modal, Notice, Plugin, setIcon } from "obsidian";
+import { MarkdownView, Modal, Notice, Plugin, setIcon } from "obsidian";
 import { t } from "./i18n";
 import type {
   App,
@@ -29,6 +29,8 @@ import type {
   DocumentWorkspaceLeaf,
 } from "./services/document-service";
 import { isAlreadyNoticed, formatIso8601 } from "./services/document-service";
+import { NestNoteFileExplorerService } from "./services/file-explorer-service";
+import type { FileExplorerVault } from "./services/file-explorer-service";
 import { NestNoteVaultEventCoordinator } from "./services/vault-event-coordinator";
 import type {
   CoordinatorApp,
@@ -46,6 +48,11 @@ import {
   NESTNOTE_ICON,
   VIEW_TYPE_NESTNOTE,
 } from "./ui/document-tree-view";
+import { createDesktopFileActions } from "./ui/desktop-file-actions";
+import {
+  FileExplorerView,
+  VIEW_TYPE_NESTNOTE_FILES,
+} from "./ui/file-explorer-view";
 import {
   NestNoteSettingTab,
   type NestNoteSettingsHost,
@@ -57,6 +64,7 @@ const COMMAND_IDS = {
   newChildDocument: "nestnote:new-child-document",
   refresh: "nestnote:refresh",
   archiveCurrentAttachment: "nestnote:archive-current-attachment",
+  openFileExplorer: "nestnote:open-file-explorer",
 } as const;
 
 export default class NestNotePlugin extends Plugin implements NestNoteSettingsHost {
@@ -67,6 +75,9 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
   private scanFlight!: SingleFlight;
   private nodes: DocumentNode[] = [];
   private attachmentActiveFile: AttachmentFileRef | null = null;
+  private fileExplorerService!: NestNoteFileExplorerService;
+  private explorerSide: NestNoteSettings["fileExplorerSide"] =
+    DEFAULT_NESTNOTE_SETTINGS.fileExplorerSide;
   private stopped = false;
 
   async onload(): Promise<void> {
@@ -75,6 +86,7 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
     } catch {
       this.settings = { ...DEFAULT_NESTNOTE_SETTINGS };
     }
+    this.explorerSide = this.settings.fileExplorerSide;
     this.addSettingTab(new NestNoteSettingTab(this.app, this));
 
     const notify = (message: string): void => {
@@ -90,8 +102,9 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
       },
       {
         handleCreatedFile: (file) => this.handleCreatedFile(file),
-        onRefresh: () => {
+        onRefresh: (paths) => {
           void this.scanAndSync();
+          this.refreshExplorersForPaths(paths);
         },
         onError: notify,
       },
@@ -124,6 +137,43 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
           getNodes: () => this.nodes,
           requestRefresh: () => this.scanAndSync(),
           notice: notify,
+        }),
+    );
+
+    const desktop = createDesktopFileActions(this.app);
+    this.fileExplorerService = new NestNoteFileExplorerService({
+      vault: createFileExplorerVault(this.app),
+      fileManager: {
+        trashFile: (file) => trashAbstract(this.app, file.path),
+      },
+      resolveDocumentPath: (filePath) =>
+        resolveDocumentPath(this.app, filePath),
+      getRootName: () => this.settings.fileExplorerRoot,
+      notice: notify,
+      importAbsolutePath: (source, dest) =>
+        desktop.importAbsolutePath(source, dest),
+    });
+
+    this.registerView(
+      VIEW_TYPE_NESTNOTE_FILES,
+      (leaf) =>
+        new FileExplorerView(leaf, {
+          getActiveFilePath: () =>
+            this.app.workspace.getActiveFile()?.path ?? null,
+          service: this.fileExplorerService,
+          desktop,
+          notice: notify,
+          getEditorInsert: () => {
+            const view =
+              this.app.workspace.getActiveViewOfType(MarkdownView);
+            if (view === null || view === undefined) {
+              return null;
+            }
+            return (text: string) => {
+              view.editor.replaceSelection(text);
+              return true;
+            };
+          },
         }),
     );
 
@@ -173,10 +223,29 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
       },
     });
 
+    this.addCommand({
+      id: COMMAND_IDS.openFileExplorer,
+      name: t("command.openFileExplorer"),
+      callback: () => {
+        this.openFileExplorer();
+      },
+    });
+
     this.coordinator.start();
     this.registerEvent(
       this.app.workspace.on("file-open", (file) => {
         this.revealOpenedDocument(file);
+        this.refreshExplorers(true);
+      }),
+    );
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", (leaf) => {
+        // 在资源管理器/文档树内操作不应重置资源管理器路径
+        const type = leaf?.view?.getViewType?.();
+        if (type === VIEW_TYPE_NESTNOTE_FILES || type === VIEW_TYPE_NESTNOTE) {
+          return;
+        }
+        this.refreshExplorers(true);
       }),
     );
     this.register(() => {
@@ -195,6 +264,15 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
 
   onSettingsChanged(): void {
     void this.scanAndSync();
+    const sideChanged = this.settings.fileExplorerSide !== this.explorerSide;
+    this.explorerSide = this.settings.fileExplorerSide;
+    if (sideChanged) {
+      void this.migrateFileExplorer().catch((error) => {
+        new Notice(errorMessage(error));
+      });
+    } else {
+      this.refreshExplorers(true);
+    }
   }
 
   private async initializeAfterLayout(): Promise<void> {
@@ -202,6 +280,13 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
     if (!this.stopped && this.settings.openPanelOnStartup) {
       try {
         await this.activateView();
+      } catch (error) {
+        new Notice(errorMessage(error));
+      }
+    }
+    if (!this.stopped && this.settings.openFileExplorerOnStartup) {
+      try {
+        await this.activateFileExplorerView();
       } catch (error) {
         new Notice(errorMessage(error));
       }
@@ -226,6 +311,76 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
     }
     await revealLeaf(this.app.workspace, leaf);
     this.revealActiveDocument();
+  }
+
+  private openFileExplorer(): void {
+    void this.activateFileExplorerView().catch((error) => {
+      new Notice(errorMessage(error));
+    });
+  }
+
+  async activateFileExplorerView(): Promise<void> {
+    const existing = this.app.workspace.getLeavesOfType(
+      VIEW_TYPE_NESTNOTE_FILES,
+    );
+    let leaf = existing[0];
+    if (leaf === undefined) {
+      const sidebarLeaf =
+        this.settings.fileExplorerSide === "left"
+          ? this.app.workspace.getLeftLeaf(false)
+          : this.app.workspace.getRightLeaf(false);
+      leaf = sidebarLeaf ?? this.app.workspace.getLeaf(true);
+      await leaf.setViewState({ type: VIEW_TYPE_NESTNOTE_FILES, active: true });
+    }
+    await revealLeaf(this.app.workspace, leaf);
+  }
+
+  /** 已打开的资源管理器迁移到当前设置的侧栏 */
+  private async migrateFileExplorer(): Promise<void> {
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_NESTNOTE_FILES);
+    if (leaves.length === 0) {
+      return;
+    }
+    for (const leaf of leaves) {
+      leaf.detach();
+    }
+    await this.activateFileExplorerView();
+  }
+
+  private refreshExplorers(resetPath: boolean): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(
+      VIEW_TYPE_NESTNOTE_FILES,
+    )) {
+      const view = leaf.view;
+      if (view instanceof FileExplorerView) {
+        void view.refresh(resetPath);
+      }
+    }
+  }
+
+  /** vault 变更落在当前文档资源根（或其祖先）内时，保持子路径刷新 */
+  private refreshExplorersForPaths(paths: readonly string[]): void {
+    if (this.stopped) {
+      return;
+    }
+    const documentPath = this.fileExplorerService.resolveActiveDocument(
+      this.app.workspace.getActiveFile()?.path ?? null,
+    );
+    if (documentPath === null) {
+      return;
+    }
+    const root = this.fileExplorerService.vaultPath(documentPath, "");
+    const affected = paths.some((raw) => {
+      const path = normalizePath(raw);
+      return (
+        path === root ||
+        path.startsWith(`${root}/`) ||
+        root.startsWith(`${path}/`)
+      );
+    });
+    if (affected) {
+      this.refreshExplorers(false);
+    }
   }
 
   private async handleCreatedFile(file: CoordinatorFileRef): Promise<void> {
@@ -384,6 +539,18 @@ function wrapWithInternal(
         inner.move(documentPath, newParentPath, insertBeforePath),
       ),
     open: (documentPath) => inner.open(documentPath),
+  };
+}
+
+function createFileExplorerVault(app: App): FileExplorerVault {
+  return {
+    getFolderByPath: (path) => app.vault.getFolderByPath(path),
+    getAbstractFileByPath: (path) => app.vault.getAbstractFileByPath(path),
+    createFolder: (path) => app.vault.createFolder(path),
+    read: (file) => app.vault.read(requireFile(app, file.path)),
+    getFileByPath: (path) => app.vault.getFileByPath(path),
+    trashFile: (file) => trashAbstract(app, file.path),
+    adapter: app.vault.adapter,
   };
 }
 
