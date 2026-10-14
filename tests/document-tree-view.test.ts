@@ -86,6 +86,9 @@ function fakeDesktop(
     ),
     openWithDefaultApp: vi.fn().mockResolvedValue(undefined),
     showInSystemExplorer: vi.fn().mockResolvedValue(undefined),
+    copyFiles: vi.fn().mockResolvedValue(undefined),
+    readClipboardFiles: vi.fn().mockResolvedValue([]),
+    importAbsolutePath: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
