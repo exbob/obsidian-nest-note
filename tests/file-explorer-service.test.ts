@@ -227,4 +227,52 @@ describe("NestNoteFileExplorerService", () => {
     expect(deps.notice).toHaveBeenCalledWith(t("notice.pasteConflict"));
     expect(deps.importAbsolutePath).not.toHaveBeenCalled();
   });
+
+  it("treats names differing only by case as a conflict with existing entries", async () => {
+    const fake = createFakeVault(["Doc", "Doc/assets", "Doc/assets/Pics"], {
+      "Doc/assets/Photo.PNG": "",
+    });
+    const { service, deps } = createService(fake);
+    await service.pasteAbsolutePaths("Doc", "", ["/src/photo.png"]);
+    expect(deps.notice).toHaveBeenCalledWith(t("notice.pasteConflict"));
+    expect(deps.importAbsolutePath).not.toHaveBeenCalled();
+
+    (deps.notice as ReturnType<typeof vi.fn>).mockClear();
+    await service.pasteAbsolutePaths("Doc", "", ["/src/pics"]);
+    expect(deps.notice).toHaveBeenCalledWith(t("notice.pasteConflict"));
+    expect(deps.importAbsolutePath).not.toHaveBeenCalled();
+  });
+
+  it("treats names differing only by case within a batch as a conflict", async () => {
+    const fake = createFakeVault(["Doc", "Doc/assets"]);
+    const { service, deps } = createService(fake);
+    await service.pasteAbsolutePaths("Doc", "", ["/x/A.png", "/y/a.PNG"]);
+    expect(deps.notice).toHaveBeenCalledWith(t("notice.pasteConflict"));
+    expect(deps.importAbsolutePath).not.toHaveBeenCalled();
+  });
+
+  it("detects case-insensitive conflicts with files unknown to the vault index", async () => {
+    const fake = createFakeVault(["Doc", "Doc/assets"]);
+    fake.vault.adapter.list = async () => ({
+      files: ["Doc/assets/.Secret"],
+      folders: [],
+    });
+    const { service, deps } = createService(fake);
+    await service.pasteAbsolutePaths("Doc", "", ["/src/.secret"]);
+    expect(deps.notice).toHaveBeenCalledWith(t("notice.pasteConflict"));
+    expect(deps.importAbsolutePath).not.toHaveBeenCalled();
+  });
+
+  it("still imports when adapter.list fails", async () => {
+    const fake = createFakeVault(["Doc", "Doc/assets"]);
+    fake.vault.adapter.list = async () => {
+      throw new Error("list failed");
+    };
+    const { service, deps } = createService(fake);
+    await service.pasteAbsolutePaths("Doc", "", ["/src/new.png"]);
+    expect(deps.importAbsolutePath).toHaveBeenCalledWith(
+      "/src/new.png",
+      "Doc/assets/new.png",
+    );
+  });
 });

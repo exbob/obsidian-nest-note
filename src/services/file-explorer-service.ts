@@ -153,26 +153,59 @@ export class NestNoteFileExplorerService {
       return;
     }
 
+    const existingNames = await this.existingNamesLower(
+      documentPath,
+      relativeWithinRoot,
+    );
     const plan: Array<{ source: string; dest: string }> = [];
     const seen = new Set<string>();
     for (const source of absoluteSources) {
       const name = baseName(source);
       const dest = this.vaultPath(documentPath, relativeWithinRoot, name);
+      const key = name.toLowerCase();
       if (
         name === "" ||
-        seen.has(dest) ||
+        seen.has(key) ||
+        existingNames.has(key) ||
         this.deps.vault.getAbstractFileByPath(dest) !== null
       ) {
         this.deps.notice(t("notice.pasteConflict"));
         return;
       }
-      seen.add(dest);
+      seen.add(key);
       plan.push({ source, dest });
     }
 
     for (const { source, dest } of plan) {
       await this.deps.importAbsolutePath(source, dest);
     }
+  }
+
+  /** 目标目录下已有条目名（小写），含 vault 未索引的隐藏文件（若 adapter 支持 list）。 */
+  private async existingNamesLower(
+    documentPath: string,
+    relativeWithinRoot: string,
+  ): Promise<Set<string>> {
+    const names = new Set<string>();
+    const folderPath = this.vaultPath(documentPath, relativeWithinRoot);
+    const folder = this.deps.vault.getAbstractFileByPath(folderPath);
+    if (folder !== null && Array.isArray(folder.children)) {
+      for (const child of folder.children as ChildRef[]) {
+        names.add((child.name ?? baseName(child.path)).toLowerCase());
+      }
+    }
+    const list = this.deps.vault.adapter.list;
+    if (typeof list === "function") {
+      try {
+        const listed = await list.call(this.deps.vault.adapter, folderPath);
+        for (const path of [...listed.files, ...listed.folders]) {
+          names.add(baseName(path).toLowerCase());
+        }
+      } catch {
+        // adapter 列表失败时，依赖 vault children 与桌面层 force:false 兜底
+      }
+    }
+    return names;
   }
 
   private linkPath(relativeWithinRoot: string, entry: ExplorerEntry): string {

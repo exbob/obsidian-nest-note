@@ -367,8 +367,8 @@ export class TextComponent {
       this.value = this.inputEl.value;
       void this.changeCallback?.(this.value);
     };
-    this.inputEl.addEventListener("change", notify);
-    this.inputEl.addEventListener("blur", notify);
+    // 与真实 Obsidian 一致：onChange 在每个 input 事件（逐键）触发
+    this.inputEl.addEventListener("input", notify);
     containerEl.appendChild(this.inputEl);
   }
 

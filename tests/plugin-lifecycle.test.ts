@@ -604,7 +604,7 @@ describe("NestNotePlugin assembly", () => {
       [...COMMAND_IDS].sort(),
     );
     expect(
-      harness(plugin).commands.some((entry) => entry.name.includes("插入附件")),
+      harness(plugin).commands.some((entry) => entry.name.includes("鎻掑叆闄勪欢")),
     ).toBe(false);
     expect(harness(plugin).registeredEvents.length).toBeGreaterThanOrEqual(4);
     expect(harness(plugin).registeredCleanups.length).toBeGreaterThanOrEqual(1);
@@ -1610,6 +1610,13 @@ created: 2020-01-01T00:00:00Z
       return app.workspace.getLeavesOfType(VIEW_TYPE_NESTNOTE_FILES);
     }
 
+    /** 测试中直接读写视图内部的相对路径（等价于进入子目录）。 */
+    type ExplorerPathView = {
+      relativeWithinRoot: string;
+      onOpen(): Promise<void>;
+      refresh(resetPath?: boolean): Promise<void>;
+    };
+
     function spyRefresh(leaf: FakeLeaf): ReturnType<typeof vi.fn> {
       const view = leaf.view as unknown as FileExplorerView;
       const spy = vi.fn().mockResolvedValue(undefined);
@@ -1719,7 +1726,7 @@ created: 2020-01-01T00:00:00Z
       ).toBe(true);
     });
 
-    it("resets explorer paths on file-open and non-explorer active-leaf-change", async () => {
+    it("refreshes without forcing a path reset on file-open and non-explorer active-leaf-change", async () => {
       const app = createApp(seedWork);
       const plugin = loadPlugin(app);
       await plugin.onload();
@@ -1728,15 +1735,71 @@ created: 2020-01-01T00:00:00Z
       const refresh = spyRefresh(leaf);
 
       app.workspace.emit("file-open", fileRef("Work/index.md"));
-      expect(refresh).toHaveBeenLastCalledWith(true);
+      expect(refresh).toHaveBeenLastCalledWith(false);
 
       refresh.mockClear();
       app.workspace.emit("active-leaf-change", new FakeLeaf(app.workspace));
-      expect(refresh).toHaveBeenCalledWith(true);
+      expect(refresh).toHaveBeenCalledWith(false);
+      expect(refresh).not.toHaveBeenCalledWith(true);
 
       refresh.mockClear();
       app.workspace.emit("active-leaf-change", leaf);
       expect(refresh).not.toHaveBeenCalled();
+    });
+
+    it("keeps the explorer subfolder when activating an editor leaf of the same document", async () => {
+      const app = createApp(seedWork);
+      const plugin = loadPlugin(app, { openFileExplorerOnStartup: false });
+      await plugin.onload();
+      await plugin.activateFileExplorerView();
+      const explorerLeaf = explorerLeaves(app)[0]!;
+      const view = explorerLeaf.view as unknown as ExplorerPathView;
+      await view.onOpen();
+      expect(view.relativeWithinRoot).toBe("");
+
+      // 杩涘叆瀛愮洰褰曪紙绛変环浜庡弻鍑?images 鏂囦欢澶癸級
+      view.relativeWithinRoot = "images";
+      await view.refresh(false);
+      expect(view.relativeWithinRoot).toBe("images");
+
+      // 鐐瑰洖缂栬緫鍣細婵€娲?markdown 鍙跺瓙 / 閲嶆柊鎵撳紑鍚屼竴鏂囨。
+      app.workspace.emit("active-leaf-change", new FakeLeaf(app.workspace));
+      app.workspace.emit("file-open", fileRef("Work/index.md"));
+      await settle2();
+      expect(view.relativeWithinRoot).toBe("images");
+
+      // 鍐嶆鍦ㄤ袱涓紪杈戝櫒鍙跺瓙涔嬮棿鍒囨崲浠嶄繚鎸?
+      app.workspace.emit("active-leaf-change", new FakeLeaf(app.workspace));
+      await settle2();
+      expect(view.relativeWithinRoot).toBe("images");
+    });
+
+    it("resets the explorer subfolder when the NestNote document changes", async () => {
+      const app = createApp((vault, workspace) => {
+        seedWork(vault, workspace);
+        seedDocument(
+          vault,
+          "Other",
+          `---
+name: Other
+created: 2020-01-01T00:00:00Z
+---
+`,
+        );
+      });
+      const plugin = loadPlugin(app, { openFileExplorerOnStartup: false });
+      await plugin.onload();
+      await plugin.activateFileExplorerView();
+      const view = explorerLeaves(app)[0]!.view as unknown as ExplorerPathView;
+      await view.onOpen();
+      view.relativeWithinRoot = "images";
+      await view.refresh(false);
+      expect(view.relativeWithinRoot).toBe("images");
+
+      app.workspace.activeFile = fileRef("Other/index.md");
+      app.workspace.emit("file-open", fileRef("Other/index.md"));
+      await settle2();
+      expect(view.relativeWithinRoot).toBe("");
     });
 
     it("refreshes explorers without resetting path when vault changes hit the active resource root", async () => {

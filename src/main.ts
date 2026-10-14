@@ -236,17 +236,18 @@ export default class NestNotePlugin extends Plugin implements NestNoteSettingsHo
     this.registerEvent(
       this.app.workspace.on("file-open", (file) => {
         this.revealOpenedDocument(file);
-        this.refreshExplorers(true);
+        // 仅在 NestNote 文档变化时由视图自身重置路径；同一文档内切换不重置
+        this.refreshExplorers(false);
       }),
     );
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", (leaf) => {
-        // 在资源管理器/文档树内操作不应重置资源管理器路径
+        // 在资源管理器/文档树内操作不应触发刷新
         const type = leaf?.view?.getViewType?.();
         if (type === VIEW_TYPE_NESTNOTE_FILES || type === VIEW_TYPE_NESTNOTE) {
           return;
         }
-        this.refreshExplorers(true);
+        this.refreshExplorers(false);
       }),
     );
     this.register(() => {

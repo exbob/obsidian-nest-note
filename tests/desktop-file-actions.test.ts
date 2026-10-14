@@ -122,7 +122,20 @@ describe("createDesktopFileActions (win32)", () => {
     await actions.importAbsolutePath("D:\\ext\\dir", "Work/dir");
     expect(copy).toHaveBeenCalledWith("D:\\ext\\dir", "C:/vault/Work/dir", {
       recursive: true,
+      force: false,
+      errorOnExist: true,
     });
+  });
+
+  it("importAbsolutePath propagates copy errors when the destination exists", async () => {
+    const copy = vi.fn().mockRejectedValue(new Error("EEXIST"));
+    const actions = createDesktopFileActions(fakeApp(), {
+      platform: "win32",
+      copy,
+    });
+    await expect(
+      actions.importAbsolutePath("D:\\ext\\a.png", "Work/a.png"),
+    ).rejects.toThrow("EEXIST");
   });
 
   it("importAbsolutePath throws when the vault path cannot be resolved", async () => {

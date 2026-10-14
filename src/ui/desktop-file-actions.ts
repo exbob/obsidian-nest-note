@@ -65,7 +65,7 @@ export function parseClipboardFileList(output: string): string[] {
 type CopyFn = (
   source: string,
   destination: string,
-  options: { recursive: boolean },
+  options: { recursive: boolean; force: boolean; errorOnExist: boolean },
 ) => Promise<void>;
 
 /** 可注入依赖，便于单测 mock（不跑真实 PowerShell / fs）。 */
@@ -144,7 +144,7 @@ function defaultRunPowerShell(command: string): Promise<string> {
 function defaultCopy(
   source: string,
   destination: string,
-  options: { recursive: boolean },
+  options: { recursive: boolean; force: boolean; errorOnExist: boolean },
 ): Promise<void> {
   const fs = nodeRequire()("fs") as {
     promises: { cp: CopyFn };
@@ -197,7 +197,12 @@ export function createDesktopFileActions(
       if (absoluteDest === null) {
         throw new Error("Vault is not backed by the local file system");
       }
-      await copy(absoluteSource, absoluteDest, { recursive: true });
+      // force:false + errorOnExist:true：目标已存在（含大小写不同名）时报错而非覆盖
+      await copy(absoluteSource, absoluteDest, {
+        recursive: true,
+        force: false,
+        errorOnExist: true,
+      });
     },
   };
 }

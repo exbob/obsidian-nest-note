@@ -342,16 +342,99 @@ describe("NestNoteSettingTab", () => {
     expect(host.onSettingsChanged).toHaveBeenCalledTimes(1);
   });
 
-  it("restores the default root and shows a Notice for invalid values", async () => {
+  it("does not save, refresh or notice while the root is being typed", async () => {
+    const { tab, host } = mountTab({ fileExplorerRoot: "files" });
+    const input = fileExplorerRootInput(tab);
+    for (const partial of ["", "a", "as", "ass", "asse", "assets"]) {
+      input.value = partial;
+      input.dispatchEvent(new Event("input"));
+      await Promise.resolve();
+    }
+
+    expect(host.settings.fileExplorerRoot).toBe("files");
+    expect(host.saveSettings).not.toHaveBeenCalled();
+    expect(host.onSettingsChanged).not.toHaveBeenCalled();
+    expect(noticeHarness().messages).toEqual([]);
+  });
+
+  it("commits the root once on change followed by blur", async () => {
+    const { tab, host } = mountTab({ fileExplorerRoot: "files" });
+    const input = fileExplorerRootInput(tab);
+    input.value = "  assets  ";
+    input.dispatchEvent(new Event("input"));
+    input.dispatchEvent(new Event("change"));
+    input.dispatchEvent(new Event("blur"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(host.settings.fileExplorerRoot).toBe("assets");
+    expect(input.value).toBe("assets");
+    expect(host.saveSettings).toHaveBeenCalledTimes(1);
+    expect(host.onSettingsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("commits the root on blur", async () => {
+    const { tab, host } = mountTab({ fileExplorerRoot: "files" });
+    const input = fileExplorerRootInput(tab);
+    input.value = "assets";
+    input.dispatchEvent(new Event("blur"));
+    await Promise.resolve();
+
+    expect(host.settings.fileExplorerRoot).toBe("assets");
+    expect(host.saveSettings).toHaveBeenCalledTimes(1);
+    expect(host.onSettingsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("commits the root on Enter", async () => {
+    const { tab, host } = mountTab({ fileExplorerRoot: "files" });
+    const input = fileExplorerRootInput(tab);
+    input.value = "assets";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    await Promise.resolve();
+
+    expect(host.settings.fileExplorerRoot).toBe("assets");
+    expect(host.saveSettings).toHaveBeenCalledTimes(1);
+    expect(host.onSettingsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores the saved root and shows a Notice for invalid values without saving", async () => {
     const { tab, host } = mountTab({ fileExplorerRoot: "assets" });
     const input = fileExplorerRootInput(tab);
     input.value = "../bad";
     input.dispatchEvent(new Event("blur"));
     await Promise.resolve();
 
+    expect(host.settings.fileExplorerRoot).toBe("assets");
+    expect(input.value).toBe("assets");
+    expect(host.saveSettings).not.toHaveBeenCalled();
+    expect(host.onSettingsChanged).not.toHaveBeenCalled();
+    expect(noticeHarness().messages.length).toBeGreaterThan(0);
+  });
+
+  it("restores the saved root when the input is committed empty", async () => {
+    const { tab, host } = mountTab({ fileExplorerRoot: "assets" });
+    const input = fileExplorerRootInput(tab);
+    input.value = "";
+    input.dispatchEvent(new Event("change"));
+    await Promise.resolve();
+
+    expect(host.settings.fileExplorerRoot).toBe("assets");
+    expect(input.value).toBe("assets");
+    expect(host.saveSettings).not.toHaveBeenCalled();
+    expect(host.onSettingsChanged).not.toHaveBeenCalled();
+  });
+
+  it("rolls back the root and shows a Notice when saveSettings fails", async () => {
+    const { tab, host } = mountTab({ fileExplorerRoot: "files" });
+    host.saveSettings.mockRejectedValueOnce(new Error("persist failed"));
+    const input = fileExplorerRootInput(tab);
+    input.value = "assets";
+    input.dispatchEvent(new Event("change"));
+    await Promise.resolve();
+    await Promise.resolve();
+
     expect(host.settings.fileExplorerRoot).toBe("files");
     expect(input.value).toBe("files");
-    expect(host.saveSettings).not.toHaveBeenCalled();
     expect(host.onSettingsChanged).not.toHaveBeenCalled();
     expect(noticeHarness().messages.length).toBeGreaterThan(0);
   });

@@ -104,10 +104,22 @@ export class NestNoteSettingTab extends PluginSettingTab {
       .setDesc(t("setting.fileExplorerRootDesc"))
       .addText((text) => {
         text.setValue(this.host.settings.fileExplorerRoot);
-        text.onChange((value) => {
-          this.commitFileExplorerRoot(text, value).catch((error) => {
-            this.noticeSaveFailure(error);
-          });
+        // 不使用 onChange（逐键触发）：仅在失焦 / change / Enter 时提交，
+        // 避免输入过程中反复保存并创建中间文件夹。
+        const commit = (): void => {
+          this.commitFileExplorerRoot(text, text.inputEl.value).catch(
+            (error) => {
+              this.noticeSaveFailure(error);
+            },
+          );
+        };
+        text.inputEl.addEventListener("change", commit);
+        text.inputEl.addEventListener("blur", commit);
+        text.inputEl.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commit();
+          }
         });
       });
   }
@@ -209,16 +221,23 @@ export class NestNoteSettingTab extends PluginSettingTab {
 
   private async commitFileExplorerRoot(
     text: StringControl,
-    value: string,
+    raw: string,
   ): Promise<void> {
+    const previous = this.host.settings.fileExplorerRoot;
+    const value = raw.trim();
+    if (value === previous) {
+      if (raw !== previous) {
+        text.setValue(previous);
+      }
+      return;
+    }
     if (!isValidFileExplorerRoot(value)) {
-      const fallback = DEFAULT_NESTNOTE_SETTINGS.fileExplorerRoot;
-      this.host.settings.fileExplorerRoot = fallback;
-      text.setValue(fallback);
+      // 非法输入：回显已保存的值，不改内存设置，也不保存/刷新
+      text.setValue(previous);
       new Notice(t("setting.fileExplorerRootInvalid"));
       return;
     }
-    const previous = this.host.settings.fileExplorerRoot;
+    text.setValue(value);
     this.host.settings.fileExplorerRoot = value;
     try {
       await this.host.saveSettings();
