@@ -61,6 +61,29 @@ Use the plus button on a row to create a child document:
 
 The command **NestNote: New child document** is different from the row button: it uses the file you are currently editing. **The parent’s `index.md` must be open first.** It does not use the selected sidebar row.
 
+### File explorer
+
+A separate sidebar panel (folder icon, title **File explorer**) lists files and folders under each NestNote document’s assets folder (default `files/`). It is independent of the document tree and does not manage `attachments/` unless you set the assets folder name to that.
+
+#### Open the panel
+
+Run **NestNote: Open file explorer** from the command palette. You can bind it under **Settings → Hotkeys**. The panel opens in the left or right sidebar according to **Pane position** (default right). There is no extra ribbon icon; use the command or the **File explorer** tab in the sidebar when the panel is already open.
+
+When no NestNote document is active, the panel shows **Open a NestNote document** and does not list files. After you open a NestNote document, the assets folder is created if it is missing.
+
+#### Panel actions
+
+
+| Action | How |
+| ------ | --- |
+| Browse | One folder level at a time. The path bar shows the path relative to the assets root (for example `files` or `files/images`). **Up** goes to the parent; **Show in system explorer** opens the current folder in the OS file manager. Single-click selects; double-click a folder to enter it; double-click a file to open it with the default app |
+| Insert into document | Right-click a file or folder → **Insert into document**. Inserts a wiki link at the Markdown cursor (audio and video as embeds). Paths are relative to the current document’s `index.md`. Requires a Markdown editor; if the file explorer has focus, the plugin uses the most recent Markdown editor |
+| Copy | Right-click → **Copy**. Puts the item on the system clipboard (compatible with the OS file manager) |
+| Paste | Right-click → **Paste** (on a row or empty list area). Pastes into the folder you are browsing. An existing item with the same name cancels with a notice |
+| Delete | Right-click → **Delete**. Checks whether the current `index.md` references the path (including descendants when deleting a folder), then asks for confirmation; referenced items use a stronger warning. Deleted items follow Obsidian’s trash preference |
+
+Switching to another NestNote document resets the panel to that document’s assets root and refreshes the list.
+
 ### Settings
 
 Under Obsidian **Settings → NestNote**:
@@ -71,6 +94,15 @@ Under Obsidian **Settings → NestNote**:
 | Max child document depth | Range `0`–`9`, default `5`. Root documents are depth `0`. Directories beyond the limit are hidden in the sidebar and cannot be created as deeper children. `0` shows only root documents |
 | Open the NestNote pane on startup | On by default. Applies on the next launch; it does not close a pane that is already open |
 | Auto-fix document format | On by default. During scans, fill missing header fields and child-link markers, and rewrite the child list to the canonical format. When off, parent links update only when you create, delete, rename, or move a child document |
+
+Under the **File explorer** heading:
+
+
+| Setting | Description |
+| ------- | ----------- |
+| Open file explorer panel on startup | On by default. Independent of **Open the NestNote pane on startup**. Applies on the next launch; does not close a panel that is already open |
+| Pane position | Left or right sidebar for the file explorer; default **Right**. Changing it moves an open panel to that sidebar |
+| Assets folder in document | Default `files`. Single folder name under each document directory (no `/`, `\`, or `..`). Invalid values reset to `files`. Created automatically when you open a NestNote document if missing |
 
 
 ### Delete
@@ -93,6 +125,7 @@ Names in the command palette (prefixed with `NestNote:`):
 | New child document | Creates a child under the currently open document, then opens its `index.md` |
 | Refresh | Rescans and refreshes the sidebar |
 | Archive current attachment | Moves the currently open attachment into its owning document’s `attachments/` |
+| Open file explorer | Opens or focuses the file explorer panel in the configured sidebar |
 
 
 ## What a document is
