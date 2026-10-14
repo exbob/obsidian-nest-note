@@ -1,7 +1,12 @@
 import { Notice, PluginSettingTab, Setting } from "obsidian";
 import type { App, Plugin } from "obsidian";
 import { t } from "../i18n";
-import type { NestNoteSettings } from "../settings";
+import {
+  DEFAULT_NESTNOTE_SETTINGS,
+  isValidFileExplorerRoot,
+  type FileExplorerSide,
+  type NestNoteSettings,
+} from "../settings";
 
 export interface NestNoteSettingsHost {
   settings: NestNoteSettings;
@@ -11,6 +16,7 @@ export interface NestNoteSettingsHost {
 
 type DepthSlider = { setValue(value: number): unknown };
 type BooleanToggle = { setValue(on: boolean): unknown };
+type StringControl = { setValue(value: string): unknown };
 
 export class NestNoteSettingTab extends PluginSettingTab {
   private readonly host: NestNoteSettingsHost;
@@ -55,6 +61,51 @@ export class NestNoteSettingTab extends PluginSettingTab {
         toggle.setValue(this.host.settings.autoFixDocumentFormat);
         toggle.onChange((value) => {
           this.commitAutoFixDocumentFormat(toggle, value).catch((error) => {
+            this.noticeSaveFailure(error);
+          });
+        });
+      });
+
+    new Setting(this.containerEl)
+      .setName(t("setting.fileExplorerHeading"))
+      .setHeading();
+
+    new Setting(this.containerEl)
+      .setName(t("setting.openFileExplorerOnStartupName"))
+      .setDesc(t("setting.openFileExplorerOnStartupDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(this.host.settings.openFileExplorerOnStartup);
+        toggle.onChange((value) => {
+          this.commitOpenFileExplorerOnStartup(toggle, value).catch(
+            (error) => {
+              this.noticeSaveFailure(error);
+            },
+          );
+        });
+      });
+
+    new Setting(this.containerEl)
+      .setName(t("setting.fileExplorerSideName"))
+      .setDesc(t("setting.fileExplorerSideDesc"))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("left", t("setting.fileExplorerSideLeft"))
+          .addOption("right", t("setting.fileExplorerSideRight"));
+        dropdown.setValue(this.host.settings.fileExplorerSide);
+        dropdown.onChange((value) => {
+          this.commitFileExplorerSide(dropdown, value).catch((error) => {
+            this.noticeSaveFailure(error);
+          });
+        });
+      });
+
+    new Setting(this.containerEl)
+      .setName(t("setting.fileExplorerRootName"))
+      .setDesc(t("setting.fileExplorerRootDesc"))
+      .addText((text) => {
+        text.setValue(this.host.settings.fileExplorerRoot);
+        text.onChange((value) => {
+          this.commitFileExplorerRoot(text, value).catch((error) => {
             this.noticeSaveFailure(error);
           });
         });
@@ -111,6 +162,69 @@ export class NestNoteSettingTab extends PluginSettingTab {
     } catch (error) {
       this.host.settings.autoFixDocumentFormat = previous;
       toggle.setValue(previous);
+      this.noticeSaveFailure(error);
+      return;
+    }
+    this.host.onSettingsChanged();
+  }
+
+  private async commitOpenFileExplorerOnStartup(
+    toggle: BooleanToggle,
+    value: boolean,
+  ): Promise<void> {
+    const previous = this.host.settings.openFileExplorerOnStartup;
+    this.host.settings.openFileExplorerOnStartup = value;
+    try {
+      await this.host.saveSettings();
+    } catch (error) {
+      this.host.settings.openFileExplorerOnStartup = previous;
+      toggle.setValue(previous);
+      this.noticeSaveFailure(error);
+      return;
+    }
+    this.host.onSettingsChanged();
+  }
+
+  private async commitFileExplorerSide(
+    dropdown: StringControl,
+    value: string,
+  ): Promise<void> {
+    if (value !== "left" && value !== "right") {
+      dropdown.setValue(this.host.settings.fileExplorerSide);
+      return;
+    }
+    const side = value as FileExplorerSide;
+    const previous = this.host.settings.fileExplorerSide;
+    this.host.settings.fileExplorerSide = side;
+    try {
+      await this.host.saveSettings();
+    } catch (error) {
+      this.host.settings.fileExplorerSide = previous;
+      dropdown.setValue(previous);
+      this.noticeSaveFailure(error);
+      return;
+    }
+    this.host.onSettingsChanged();
+  }
+
+  private async commitFileExplorerRoot(
+    text: StringControl,
+    value: string,
+  ): Promise<void> {
+    if (!isValidFileExplorerRoot(value)) {
+      const fallback = DEFAULT_NESTNOTE_SETTINGS.fileExplorerRoot;
+      this.host.settings.fileExplorerRoot = fallback;
+      text.setValue(fallback);
+      new Notice(t("setting.fileExplorerRootInvalid"));
+      return;
+    }
+    const previous = this.host.settings.fileExplorerRoot;
+    this.host.settings.fileExplorerRoot = value;
+    try {
+      await this.host.saveSettings();
+    } catch (error) {
+      this.host.settings.fileExplorerRoot = previous;
+      text.setValue(previous);
       this.noticeSaveFailure(error);
       return;
     }

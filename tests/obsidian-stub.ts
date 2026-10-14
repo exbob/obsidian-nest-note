@@ -313,6 +313,77 @@ export class SliderComponent {
   }
 }
 
+export class DropdownComponent {
+  selectEl: HTMLSelectElement;
+  private value = "";
+  private changeCallback: ((value: string) => unknown) | null = null;
+
+  constructor(containerEl: HTMLElement) {
+    this.selectEl = document.createElement("select");
+    this.selectEl.addEventListener("change", () => {
+      this.value = this.selectEl.value;
+      void this.changeCallback?.(this.value);
+    });
+    containerEl.appendChild(this.selectEl);
+  }
+
+  addOption(value: string, display: string): this {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = display;
+    this.selectEl.append(option);
+    return this;
+  }
+
+  setValue(value: string): this {
+    this.value = value;
+    this.selectEl.value = value;
+    return this;
+  }
+
+  getValue(): string {
+    return this.value;
+  }
+
+  onChange(callback: (value: string) => unknown): this {
+    this.changeCallback = callback;
+    return this;
+  }
+}
+
+export class TextComponent {
+  inputEl: HTMLInputElement;
+  private value = "";
+  private changeCallback: ((value: string) => unknown) | null = null;
+
+  constructor(containerEl: HTMLElement) {
+    this.inputEl = document.createElement("input");
+    this.inputEl.type = "text";
+    const notify = (): void => {
+      this.value = this.inputEl.value;
+      void this.changeCallback?.(this.value);
+    };
+    this.inputEl.addEventListener("change", notify);
+    this.inputEl.addEventListener("blur", notify);
+    containerEl.appendChild(this.inputEl);
+  }
+
+  setValue(value: string): this {
+    this.value = value;
+    this.inputEl.value = value;
+    return this;
+  }
+
+  getValue(): string {
+    return this.value;
+  }
+
+  onChange(callback: (value: string) => unknown): this {
+    this.changeCallback = callback;
+    return this;
+  }
+}
+
 export class ToggleComponent {
   toggleEl: HTMLElement;
   private value = false;
@@ -374,6 +445,11 @@ export class Setting {
     return this;
   }
 
+  setHeading(): this {
+    this.settingEl.classList.add("setting-item-heading");
+    return this;
+  }
+
   addSlider(cb: (component: SliderComponent) => unknown): this {
     cb(new SliderComponent(this.controlEl));
     return this;
@@ -381,6 +457,16 @@ export class Setting {
 
   addToggle(cb: (component: ToggleComponent) => unknown): this {
     cb(new ToggleComponent(this.controlEl));
+    return this;
+  }
+
+  addDropdown(cb: (component: DropdownComponent) => unknown): this {
+    cb(new DropdownComponent(this.controlEl));
+    return this;
+  }
+
+  addText(cb: (component: TextComponent) => unknown): this {
+    cb(new TextComponent(this.controlEl));
     return this;
   }
 }

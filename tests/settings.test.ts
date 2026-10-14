@@ -171,6 +171,26 @@ function autoFixToggle(tab: NestNoteSettingTab): HTMLElement {
   return switchAt(tab, 1);
 }
 
+function fileExplorerStartupToggle(tab: NestNoteSettingTab): HTMLElement {
+  return switchAt(tab, 2);
+}
+
+function fileExplorerSideSelect(tab: NestNoteSettingTab): HTMLSelectElement {
+  const select = tab.containerEl.querySelector("select");
+  if (!(select instanceof HTMLSelectElement)) {
+    throw new Error("missing file explorer side dropdown");
+  }
+  return select;
+}
+
+function fileExplorerRootInput(tab: NestNoteSettingTab): HTMLInputElement {
+  const input = tab.containerEl.querySelector("input[type='text']");
+  if (!(input instanceof HTMLInputElement)) {
+    throw new Error("missing file explorer root input");
+  }
+  return input;
+}
+
 afterEach(() => {
   document.body.replaceChildren();
   noticeHarness().messages = [];
@@ -186,6 +206,13 @@ describe("NestNoteSettingTab", () => {
     expect(text).toContain(t("setting.openPanelOnStartupDesc"));
     expect(text).toContain(t("setting.autoFixDocumentFormatName"));
     expect(text).toContain(t("setting.autoFixDocumentFormatDesc"));
+    expect(text).toContain(t("setting.fileExplorerHeading"));
+    expect(text).toContain(t("setting.openFileExplorerOnStartupName"));
+    expect(text).toContain(t("setting.openFileExplorerOnStartupDesc"));
+    expect(text).toContain(t("setting.fileExplorerSideName"));
+    expect(text).toContain(t("setting.fileExplorerSideDesc"));
+    expect(text).toContain(t("setting.fileExplorerRootName"));
+    expect(text).toContain(t("setting.fileExplorerRootDesc"));
 
     const input = depthInput(tab);
     expect(input.min).toBe("0");
@@ -194,6 +221,11 @@ describe("NestNoteSettingTab", () => {
     expect(input.value).toBe("3");
     expect(startupToggle(tab).getAttribute("aria-checked")).toBe("false");
     expect(autoFixToggle(tab).getAttribute("aria-checked")).toBe("true");
+    expect(fileExplorerStartupToggle(tab).getAttribute("aria-checked")).toBe(
+      "true",
+    );
+    expect(fileExplorerSideSelect(tab).value).toBe("right");
+    expect(fileExplorerRootInput(tab).value).toBe("files");
   });
 
   it("saves a valid depth change and notifies the host", async () => {
@@ -272,6 +304,54 @@ describe("NestNoteSettingTab", () => {
     expect(host.settings.openPanelOnStartup).toBe(true);
     expect(startupToggle(tab).getAttribute("aria-checked")).toBe("true");
     expect(host.saveSettings).toHaveBeenCalledTimes(1);
+    expect(host.onSettingsChanged).not.toHaveBeenCalled();
+    expect(noticeHarness().messages.length).toBeGreaterThan(0);
+  });
+
+  it("saves file explorer startup toggle changes and notifies the host", async () => {
+    const { tab, host } = mountTab({ openFileExplorerOnStartup: true });
+    fileExplorerStartupToggle(tab).click();
+    await Promise.resolve();
+
+    expect(host.settings.openFileExplorerOnStartup).toBe(false);
+    expect(host.saveSettings).toHaveBeenCalledTimes(1);
+    expect(host.onSettingsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves file explorer side dropdown changes and notifies the host", async () => {
+    const { tab, host } = mountTab({ fileExplorerSide: "right" });
+    const select = fileExplorerSideSelect(tab);
+    select.value = "left";
+    select.dispatchEvent(new Event("change"));
+    await Promise.resolve();
+
+    expect(host.settings.fileExplorerSide).toBe("left");
+    expect(host.saveSettings).toHaveBeenCalledTimes(1);
+    expect(host.onSettingsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves a valid file explorer root change and notifies the host", async () => {
+    const { tab, host } = mountTab({ fileExplorerRoot: "files" });
+    const input = fileExplorerRootInput(tab);
+    input.value = "assets";
+    input.dispatchEvent(new Event("change"));
+    await Promise.resolve();
+
+    expect(host.settings.fileExplorerRoot).toBe("assets");
+    expect(host.saveSettings).toHaveBeenCalledTimes(1);
+    expect(host.onSettingsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores the default root and shows a Notice for invalid values", async () => {
+    const { tab, host } = mountTab({ fileExplorerRoot: "assets" });
+    const input = fileExplorerRootInput(tab);
+    input.value = "../bad";
+    input.dispatchEvent(new Event("blur"));
+    await Promise.resolve();
+
+    expect(host.settings.fileExplorerRoot).toBe("files");
+    expect(input.value).toBe("files");
+    expect(host.saveSettings).not.toHaveBeenCalled();
     expect(host.onSettingsChanged).not.toHaveBeenCalled();
     expect(noticeHarness().messages.length).toBeGreaterThan(0);
   });
