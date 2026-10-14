@@ -34,7 +34,40 @@ const IMAGE_EXTENSIONS = new Set([
 ]);
 const AUDIO_EXTENSIONS = new Set(["mp3", "wav", "ogg", "m4a", "flac", "aac"]);
 const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "mov", "mkv", "avi"]);
-const TEXT_EXTENSIONS = new Set(["md", "txt", "json", "csv", "log", "pdf"]);
+const TEXT_EXTENSIONS = new Set(["md", "txt", "json", "csv", "log"]);
+const PDF_EXTENSIONS = new Set(["pdf"]);
+const ARCHIVE_EXTENSIONS = new Set(["zip", "rar", "7z", "tar", "gz"]);
+const CODE_EXTENSIONS = new Set([
+  "js",
+  "ts",
+  "tsx",
+  "jsx",
+  "py",
+  "rs",
+  "go",
+  "java",
+  "c",
+  "cpp",
+  "h",
+  "cs",
+  "css",
+  "html",
+  "xml",
+  "yml",
+  "yaml",
+]);
+
+/** Lucide 图标类别，用于着色区分类型 */
+export type FileIconKind =
+  | "folder"
+  | "image"
+  | "audio"
+  | "video"
+  | "text"
+  | "pdf"
+  | "archive"
+  | "code"
+  | "file";
 
 export class FileExplorerView extends ItemView {
   private documentPath: string | null = null;
@@ -208,8 +241,10 @@ export class FileExplorerView extends ItemView {
       row.classList.add("is-selected");
     }
 
+    const meta = fileIconMeta(entry);
     const icon = createEl("span", { cls: "nestnote-files-icon" });
-    setIcon(icon, iconForEntry(entry));
+    icon.dataset.fileKind = meta.kind;
+    setIcon(icon, meta.icon);
     const name = createEl("span", {
       cls: "nestnote-files-name",
       text: entry.name,
@@ -322,13 +357,6 @@ export class FileExplorerView extends ItemView {
       item.setIcon("copy");
       item.onClick(() => {
         void this.copyEntry(entry);
-      });
-    });
-    menu.addItem((item) => {
-      item.setTitle(t("ui.paste"));
-      item.setIcon("clipboard-paste");
-      item.onClick(() => {
-        void this.pasteFromClipboard();
       });
     });
     menu.addSeparator();
@@ -521,15 +549,22 @@ function joinRelative(base: string, name: string): string {
   return base === "" ? name : `${base}/${name}`;
 }
 
-function iconForEntry(entry: ExplorerEntry): string {
+export function fileIconMeta(entry: ExplorerEntry): {
+  icon: string;
+  kind: FileIconKind;
+} {
   if (entry.kind === "folder") {
-    return "folder";
+    return { icon: "folder", kind: "folder" };
   }
   const dot = entry.name.lastIndexOf(".");
   const ext = dot > 0 ? entry.name.slice(dot + 1).toLowerCase() : "";
-  if (IMAGE_EXTENSIONS.has(ext)) return "file-image";
-  if (AUDIO_EXTENSIONS.has(ext)) return "file-audio";
-  if (VIDEO_EXTENSIONS.has(ext)) return "file-video";
-  if (TEXT_EXTENSIONS.has(ext)) return "file-text";
-  return "file";
+  // 图标来自 Obsidian 内置 Lucide 集（setIcon）；用更直观的 glyph + data-file-kind 着色
+  if (IMAGE_EXTENSIONS.has(ext)) return { icon: "image", kind: "image" };
+  if (AUDIO_EXTENSIONS.has(ext)) return { icon: "music", kind: "audio" };
+  if (VIDEO_EXTENSIONS.has(ext)) return { icon: "film", kind: "video" };
+  if (PDF_EXTENSIONS.has(ext)) return { icon: "book-open", kind: "pdf" };
+  if (ARCHIVE_EXTENSIONS.has(ext)) return { icon: "archive", kind: "archive" };
+  if (CODE_EXTENSIONS.has(ext)) return { icon: "file-code", kind: "code" };
+  if (TEXT_EXTENSIONS.has(ext)) return { icon: "file-text", kind: "text" };
+  return { icon: "file", kind: "file" };
 }

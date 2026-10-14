@@ -79,7 +79,7 @@ When no NestNote document is active, the panel shows **Open a NestNote document*
 | Browse | One folder level at a time. The path bar shows the path relative to the assets root (for example `files` or `files/images`). **Up** goes to the parent; **Show in system explorer** opens the current folder in the OS file manager. Single-click selects; double-click a folder to enter it; double-click a file to open it with the default app |
 | Insert into document | Right-click a file or folder → **Insert into document**. Inserts a wiki link at the Markdown cursor (audio and video as embeds). Paths are relative to the current document’s `index.md`. Requires a Markdown editor; if the file explorer has focus, the plugin uses the most recent Markdown editor |
 | Copy | Right-click → **Copy**. Puts the item on the system clipboard (compatible with the OS file manager) |
-| Paste | Right-click → **Paste** (on a row or empty list area). Pastes into the folder you are browsing. An existing item with the same name cancels with a notice |
+| Paste | Right-click empty list area → **Paste** (not shown on file/folder rows). Pastes into the folder you are browsing. An existing item with the same name cancels with a notice |
 | Delete | Right-click → **Delete**. Checks whether the current `index.md` references the path (including descendants when deleting a folder), then asks for confirmation; referenced items use a stronger warning. Deleted items follow Obsidian’s trash preference |
 
 Switching to another NestNote document resets the panel to that document’s assets root and refreshes the list.

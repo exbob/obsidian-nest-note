@@ -4,6 +4,7 @@ import type { App } from "obsidian";
 import {
   absolutePathFromAdapter,
   buildSetClipboardFilesCommand,
+  buildBringExplorerToFrontCommand,
   createDesktopFileActions,
   escapePowerShellSingleQuoted,
   parseClipboardFileList,
@@ -62,6 +63,22 @@ describe("parseClipboardFileList", () => {
   it("returns [] for empty output", () => {
     expect(parseClipboardFileList("")).toEqual([]);
     expect(parseClipboardFileList("\r\n")).toEqual([]);
+  });
+});
+
+describe("buildBringExplorerToFrontCommand", () => {
+  it("uses AppActivate without Add-Type or here-strings", () => {
+    const cmd = buildBringExplorerToFrontCommand("C:\\vault\\files\\a.png");
+    expect(cmd).toContain("AppActivate");
+    expect(cmd).toContain("WScript.Shell");
+    expect(cmd).not.toContain("Add-Type");
+    expect(cmd).not.toContain("@'");
+    expect(cmd).toContain("C:\\vault\\files\\a.png");
+  });
+
+  it("escapes single quotes in the path", () => {
+    const cmd = buildBringExplorerToFrontCommand("C:\\it's\\a.png");
+    expect(cmd).toContain("C:\\it''s\\a.png");
   });
 });
 
@@ -146,6 +163,56 @@ describe("createDesktopFileActions (win32)", () => {
       actions.importAbsolutePath("D:\\ext\\a.md", "Work/a.md"),
     ).rejects.toThrow();
     expect(copy).not.toHaveBeenCalled();
+  });
+
+  it("showInSystemExplorer opens a folder path (not parent via /select)", async () => {
+    const openInExplorer = vi.fn().mockResolvedValue(undefined);
+    const runPowerShell = vi.fn().mockResolvedValue("");
+    const actions = createDesktopFileActions(fakeApp(), {
+      platform: "win32",
+      openInExplorer,
+      runPowerShell,
+      isDirectory: () => true,
+    });
+    await actions.showInSystemExplorer("C:\\vault\\files\\Software");
+    expect(openInExplorer).toHaveBeenCalledWith(
+      "C:\\vault\\files\\Software",
+      "folder",
+    );
+    expect(runPowerShell).toHaveBeenCalledWith(
+      buildBringExplorerToFrontCommand("C:\\vault\\files\\Software"),
+    );
+  });
+
+  it("showInSystemExplorer selects a file in its parent folder", async () => {
+    const openInExplorer = vi.fn().mockResolvedValue(undefined);
+    const runPowerShell = vi.fn().mockResolvedValue("");
+    const actions = createDesktopFileActions(fakeApp(), {
+      platform: "win32",
+      openInExplorer,
+      runPowerShell,
+      isDirectory: () => false,
+    });
+    await actions.showInSystemExplorer("C:\\vault\\files\\a.png");
+    expect(openInExplorer).toHaveBeenCalledWith(
+      "C:\\vault\\files\\a.png",
+      "select",
+    );
+  });
+
+  it("showInSystemExplorer still succeeds when the focus script fails", async () => {
+    const openInExplorer = vi.fn().mockResolvedValue(undefined);
+    const runPowerShell = vi.fn().mockRejectedValue(new Error("focus failed"));
+    const actions = createDesktopFileActions(fakeApp(), {
+      platform: "win32",
+      openInExplorer,
+      runPowerShell,
+      isDirectory: () => true,
+    });
+    await expect(
+      actions.showInSystemExplorer("C:\\vault\\files\\Software"),
+    ).resolves.toBeUndefined();
+    expect(openInExplorer).toHaveBeenCalled();
   });
 });
 

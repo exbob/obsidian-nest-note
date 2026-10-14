@@ -184,8 +184,18 @@ describe("FileExplorerView", () => {
       rowEl("images").querySelector("[data-icon]")?.getAttribute("data-icon"),
     ).toBe("folder");
     expect(
+      rowEl("images")
+        .querySelector(".nestnote-files-icon")
+        ?.getAttribute("data-file-kind"),
+    ).toBe("folder");
+    expect(
       rowEl("photo.png").querySelector("[data-icon]")?.getAttribute("data-icon"),
-    ).toBe("file-image");
+    ).toBe("image");
+    expect(
+      rowEl("photo.png")
+        .querySelector(".nestnote-files-icon")
+        ?.getAttribute("data-file-kind"),
+    ).toBe("image");
     expect(
       rowEl("notes.txt").querySelector("[data-icon]")?.getAttribute("data-icon"),
     ).toBe("file-text");
@@ -276,14 +286,13 @@ describe("FileExplorerView", () => {
     expect(service.listEntries).toHaveBeenLastCalledWith(DOC, "");
   });
 
-  it("orders the context menu: insert, copy, paste, delete", async () => {
+  it("orders the entry context menu: insert, copy, delete", async () => {
     await mount();
     openContextMenu("photo.png");
     expect(menuStructure()).toEqual([
       t("ui.insertIntoDocument"),
       "separator",
       t("ui.copy"),
-      t("ui.paste"),
       "separator",
       t("ui.delete"),
     ]);
@@ -299,6 +308,15 @@ describe("FileExplorerView", () => {
       );
     expect(menuStructure()).toEqual([t("ui.paste")]);
   });
+
+  function openBlankContextMenu(): void {
+    document.querySelector(".menu")?.remove();
+    document
+      .querySelector(".nestnote-files-body")
+      ?.dispatchEvent(
+        new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
+      );
+  }
 
   it("inserts a wiki link through the editor insert callback", async () => {
     const insert = vi.fn().mockReturnValue(true);
@@ -355,7 +373,7 @@ describe("FileExplorerView", () => {
     });
     const { service } = await mount({ desktop });
     const callsBefore = vi.mocked(service.listEntries).mock.calls.length;
-    openContextMenu("photo.png");
+    openBlankContextMenu();
     clickMenu(t("ui.paste"));
     await flush();
     expect(service.pasteAbsolutePaths).toHaveBeenCalledWith(DOC, "", [
@@ -366,7 +384,7 @@ describe("FileExplorerView", () => {
 
   it("notices when the clipboard has no files", async () => {
     const { service, notice } = await mount();
-    openContextMenu("photo.png");
+    openBlankContextMenu();
     clickMenu(t("ui.paste"));
     await flush();
     expect(service.pasteAbsolutePaths).not.toHaveBeenCalled();
@@ -378,7 +396,7 @@ describe("FileExplorerView", () => {
       readClipboardFiles: vi.fn().mockRejectedValue(new Error("boom")),
     });
     const { service, notice } = await mount({ desktop });
-    openContextMenu("photo.png");
+    openBlankContextMenu();
     clickMenu(t("ui.paste"));
     await flush();
     expect(service.pasteAbsolutePaths).not.toHaveBeenCalled();
@@ -393,7 +411,7 @@ describe("FileExplorerView", () => {
       pasteAbsolutePaths: vi.fn().mockRejectedValue(new Error("copy failed")),
     });
     const { notice } = await mount({ desktop, service });
-    openContextMenu("photo.png");
+    openBlankContextMenu();
     clickMenu(t("ui.paste"));
     await flush();
     expect(notice).toHaveBeenCalledWith(t("notice.pasteFailed"));

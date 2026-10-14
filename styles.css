@@ -220,6 +220,38 @@ button.nestnote-icon-button:disabled:hover {
   color: var(--text-muted);
 }
 
+.nestnote-files-icon[data-file-kind="folder"] {
+  color: var(--color-yellow);
+}
+
+.nestnote-files-icon[data-file-kind="image"] {
+  color: var(--color-green);
+}
+
+.nestnote-files-icon[data-file-kind="audio"] {
+  color: var(--color-orange);
+}
+
+.nestnote-files-icon[data-file-kind="video"] {
+  color: var(--color-purple);
+}
+
+.nestnote-files-icon[data-file-kind="text"] {
+  color: var(--color-cyan);
+}
+
+.nestnote-files-icon[data-file-kind="pdf"] {
+  color: var(--color-red);
+}
+
+.nestnote-files-icon[data-file-kind="archive"] {
+  color: var(--color-orange);
+}
+
+.nestnote-files-icon[data-file-kind="code"] {
+  color: var(--color-blue);
+}
+
 .nestnote-files-name {
   flex: 1;
   min-width: 0;
