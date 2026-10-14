@@ -16,7 +16,7 @@
 - **文件夹右键：** 与文件相同（插入文档、复制、粘贴、删除）；插入用 `[[path|foldername]]`。
 - **插入链接 path：** 相对当前 `index.md`（例如 `files/photo.png`），不是库根绝对 wiki 路径，也不是仅文件名。
 - **面板默认位置：** 右侧边栏；可通过设置改为左侧。
-- **启动行为：** 「启动时打开 NestNote 面板」只影响文档树，不自动打开资源管理器。
+- **启动行为：** 文档树与资源管理器各自有独立开关。「启动时打开 NestNote 面板」只影响文档树；另设「启动时打开资源管理器面板」，**默认开启**。两者互不影响。
 - **路径栏显示：** 相对资源根的当前路径（根为配置名，如 `files` 或 `files/images`），不强制带文档目录名。
 
 ## 3. 架构与组件
@@ -26,7 +26,7 @@
 | `FileExplorerView` | UI：路径栏、单层列表、右键菜单、双击；不直接写 vault |
 | `FileExplorerService` | 解析当前 NestNote 文档、保证根目录存在、列一层、插入链接、关联检查、删除 |
 | `DesktopFileActions`（扩展） | 已有默认应用打开 / 系统资源管理器；新增系统剪贴板文件复制与粘贴 |
-| Settings | `fileExplorerSide: "left" \| "right"`（默认 `"right"`）；`fileExplorerRoot: string`（默认 `"files"`） |
+| Settings | `fileExplorerSide: "left" \| "right"`（默认 `"right"`）；`fileExplorerRoot: string`（默认 `"files"`）；`openFileExplorerOnStartup: boolean`（默认 `true`） |
 | Plugin (`main.ts`) | 注册视图与命令；监听活动文件变化并通知面板刷新；侧栏设置变更时移动面板 |
 
 边界：文档树与资源管理器互不依赖。资源管理器只依赖「当前 NestNote 文档路径 + 相对根目录名」。
@@ -86,12 +86,11 @@
 
 | 设置 | 默认 | 说明 |
 |------|------|------|
+| 启动时打开资源管理器面板 | 开启 | 只影响下次启动；不会关掉当前已打开的面板。与「启动时打开 NestNote 面板」独立 |
 | 面板位置 | 右侧 | `left` / `right`；变更后将面板移到对应边栏 |
 | 文档内资源文件夹 | `files` | 相对文档目录的单段路径名；禁止 `..`、绝对路径、空串、含 `/` 或 `\` 的多级路径；非法值归一化为 `files` |
 
 命令：`NestNote: 打开资源管理器`（打开或聚焦该面板到配置的边栏）。
-
-不提供「启动时自动打开资源管理器」设置。
 
 ## 7. 数据流
 
@@ -111,7 +110,7 @@
 
 对齐现有 vitest + stub 风格：
 
-- `normalizeNestNoteSettings`：`fileExplorerSide` / `fileExplorerRoot` 非法回退。
+- `normalizeNestNoteSettings`：`fileExplorerSide` / `fileExplorerRoot` 非法回退；`openFileExplorerOnStartup` 缺省为 `true`。
 - 链接生成：相对 `index.md`；音视频 embed vs 普通 wiki；文件夹链接。
 - 关联检测：有/无引用；文件夹子孙路径。
 - 列目录：仅一层；文件夹优先排序。
