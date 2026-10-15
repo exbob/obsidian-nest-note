@@ -8,7 +8,9 @@ import {
 import type { NestNoteFileExplorerService } from "../src/services/file-explorer-service";
 import type { DesktopFileActions } from "../src/ui/desktop-file-actions";
 import type { ExplorerEntry } from "../src/domain/file-explorer-path";
-import { t } from "../src/i18n";
+import { setLocaleForTests, t } from "../src/i18n";
+
+setLocaleForTests("zh");
 
 const DOC = "Work";
 
@@ -39,6 +41,7 @@ function fakeService(
     indexReferencesEntry: vi.fn().mockResolvedValue(false),
     trashEntry: vi.fn().mockResolvedValue(undefined),
     pasteAbsolutePaths: vi.fn().mockResolvedValue(undefined),
+    createFolder: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
   return service as unknown as NestNoteFileExplorerService & typeof service;
@@ -109,6 +112,15 @@ function openContextMenu(name: string): void {
   rowEl(name).dispatchEvent(
     new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
   );
+}
+
+function openBlankContextMenu(): void {
+  document.querySelector(".menu")?.remove();
+  document
+    .querySelector(".nestnote-files-body")
+    ?.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
+    );
 }
 
 function menuStructure(): string[] {
@@ -298,25 +310,20 @@ describe("FileExplorerView", () => {
     ]);
   });
 
-  it("offers paste only on the blank area context menu", async () => {
+  it("orders the blank area context menu: new folder, then paste", async () => {
     await mount();
-    document.querySelector(".menu")?.remove();
-    document
-      .querySelector(".nestnote-files-body")
-      ?.dispatchEvent(
-        new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
-      );
-    expect(menuStructure()).toEqual([t("ui.paste")]);
+    openBlankContextMenu();
+    expect(menuStructure()).toEqual([
+      t("ui.newFolder"),
+      "separator",
+      t("ui.paste"),
+    ]);
+    const item = document.querySelector(
+      `.menu [aria-label="${t("ui.newFolder")}"]`,
+    );
+    expect(item).toBeInstanceOf(HTMLElement);
+    expect((item as HTMLElement).dataset.icon).toBe("folder-plus");
   });
-
-  function openBlankContextMenu(): void {
-    document.querySelector(".menu")?.remove();
-    document
-      .querySelector(".nestnote-files-body")
-      ?.dispatchEvent(
-        new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
-      );
-  }
 
   it("inserts a wiki link through the editor insert callback", async () => {
     const insert = vi.fn().mockReturnValue(true);
@@ -475,5 +482,126 @@ describe("FileExplorerView", () => {
     cancel.click();
     await flush();
     expect(service.trashEntry).not.toHaveBeenCalled();
+  });
+
+  async function submitFolderName(name: string): Promise<void> {
+    const modal = document.querySelector(".nestnote-modal");
+    if (!(modal instanceof HTMLElement)) {
+      throw new Error("modal was not opened");
+    }
+    const input = modal.querySelector("input");
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error("name input missing");
+    }
+    input.value = name;
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+    );
+    await flush();
+  }
+
+  function cancelFolderModal(): void {
+    const cancel = document.querySelector(
+      `.nestnote-modal [aria-label="${t("ui.cancel")}"]`,
+    );
+    if (!(cancel instanceof HTMLElement)) {
+      throw new Error("cancel button missing");
+    }
+    cancel.click();
+  }
+
+  it("creates a folder from the blank menu, refreshes, and selects it", async () => {
+    const service = fakeService();
+    let entries = rootEntries;
+    service.listEntries = vi.fn(async () => entries);
+    service.createFolder = vi.fn(async (_doc: string, _rel: string, name: string) => {
+      entries = [...entries, { name, kind: "folder" }];
+    });
+    const { notice } = await mount({ service });
+    const callsBefore = vi.mocked(service.listEntries).mock.calls.length;
+    openBlankContextMenu();
+    clickMenu(t("ui.newFolder"));
+    const input = document.querySelector(".nestnote-modal input");
+    expect(input).toBeInstanceOf(HTMLInputElement);
+    expect((input as HTMLInputElement).getAttribute("aria-label")).toBe(
+      t("ui.folderName"),
+    );
+    expect(document.activeElement).toBe(input);
+    await submitFolderName("  notes  ");
+    expect(service.createFolder).toHaveBeenCalledWith(DOC, "", "notes");
+    expect(vi.mocked(service.listEntries).mock.calls.length).toBe(callsBefore + 1);
+    expect(vi.mocked(service.listEntries).mock.lastCall?.[1]).toBe("");
+    expect(rowEl("notes").classList.contains("is-selected")).toBe(true);
+    expect(pathText()).toBe("files");
+    expect(notice).not.toHaveBeenCalled();
+    expect(document.querySelector(".nestnote-modal")).toBeNull();
+  });
+
+  it("creates the folder in the folder currently being browsed", async () => {
+    const { service } = await mount();
+    rowEl("images").dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    await flush();
+    openBlankContextMenu();
+    clickMenu(t("ui.newFolder"));
+    await submitFolderName("album");
+    expect(service.createFolder).toHaveBeenCalledWith(DOC, "images", "album");
+    expect(pathText()).toBe("files/images");
+  });
+
+  it("keeps the name dialog open when the trimmed name is empty", async () => {
+    const { service } = await mount();
+    openBlankContextMenu();
+    clickMenu(t("ui.newFolder"));
+    await submitFolderName("   ");
+    expect(service.createFolder).not.toHaveBeenCalled();
+    expect(document.querySelector(".nestnote-modal")).not.toBeNull();
+  });
+
+  it("does not create a folder when the dialog is cancelled", async () => {
+    const { service } = await mount();
+    openBlankContextMenu();
+    clickMenu(t("ui.newFolder"));
+    cancelFolderModal();
+    await flush();
+    expect(service.createFolder).not.toHaveBeenCalled();
+    expect(document.querySelector(".nestnote-modal")).toBeNull();
+  });
+
+  it.each([
+    ["notice.folderNameInvalid", t("notice.folderNameInvalid")],
+    ["notice.folderExists", t("notice.folderExists")],
+  ] as const)("notices %s from the service", async (_key, message) => {
+    const service = fakeService({
+      createFolder: vi.fn().mockRejectedValue(new Error(message)),
+    });
+    const { notice } = await mount({ service });
+    const callsBefore = vi.mocked(service.listEntries).mock.calls.length;
+    openBlankContextMenu();
+    clickMenu(t("ui.newFolder"));
+    await submitFolderName("notes");
+    expect(notice).toHaveBeenCalledWith(message);
+    expect(vi.mocked(service.listEntries).mock.calls.length).toBe(callsBefore);
+  });
+
+  it("notices a generic failure when creating a folder throws", async () => {
+    const service = fakeService({
+      createFolder: vi.fn().mockRejectedValue(new Error("disk full")),
+    });
+    const { notice } = await mount({ service });
+    openBlankContextMenu();
+    clickMenu(t("ui.newFolder"));
+    await submitFolderName("notes");
+    expect(notice).toHaveBeenCalledWith(t("notice.createFolderFailed"));
+  });
+
+  it("notices a generic failure when the rejection is not an Error", async () => {
+    const service = fakeService({
+      createFolder: vi.fn().mockRejectedValue("nope"),
+    });
+    const { notice } = await mount({ service });
+    openBlankContextMenu();
+    clickMenu(t("ui.newFolder"));
+    await submitFolderName("notes");
+    expect(notice).toHaveBeenCalledWith(t("notice.createFolderFailed"));
   });
 });

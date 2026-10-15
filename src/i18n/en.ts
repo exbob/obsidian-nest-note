@@ -63,6 +63,8 @@ export const en: Record<MessageKey, string> = {
   "ui.fileExplorerGoUp": "Up",
   "ui.insertIntoDocument": "Insert into document",
   "ui.paste": "Paste",
+  "ui.newFolder": "New folder",
+  "ui.folderName": "Folder name",
   "ui.childrenHeading": "Child Document",
   "notice.openChildRequiresDocument":
     "Open a NestNote document before creating a child document",
@@ -84,6 +86,9 @@ export const en: Record<MessageKey, string> = {
   "notice.pasteConflict":
     "A file or folder with the same name already exists at the destination",
   "notice.pasteFailed": "Could not paste the file",
+  "notice.folderNameInvalid": "Invalid folder name",
+  "notice.folderExists": "A file or folder with that name already exists",
+  "notice.createFolderFailed": "Could not create the folder",
   "error.targetExists": "Target already exists: {path}",
   "error.maxDepthReached": "Maximum child document depth reached ({max})",
   "error.documentNotFound": "Document not found: {path}",

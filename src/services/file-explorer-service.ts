@@ -140,6 +140,32 @@ export class NestNoteFileExplorerService {
     await this.deps.fileManager.trashFile(target);
   }
 
+  async createFolder(
+    documentPath: string,
+    relativeWithinRoot: string,
+    name: string,
+  ): Promise<void> {
+    const trimmed = name.trim();
+    if (
+      trimmed === "" ||
+      trimmed === "." ||
+      trimmed === ".." ||
+      /[/\\]/.test(trimmed)
+    ) {
+      throw new Error(t("notice.folderNameInvalid"));
+    }
+    const existing = await this.existingNamesLower(
+      documentPath,
+      relativeWithinRoot,
+    );
+    if (existing.has(trimmed.toLowerCase())) {
+      throw new Error(t("notice.folderExists"));
+    }
+    await this.deps.vault.createFolder(
+      this.vaultPath(documentPath, relativeWithinRoot, trimmed),
+    );
+  }
+
   async pasteAbsolutePaths(
     documentPath: string,
     relativeWithinRoot: string,

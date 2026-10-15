@@ -275,4 +275,55 @@ describe("NestNoteFileExplorerService", () => {
       "Doc/assets/new.png",
     );
   });
+
+  it("creates a trimmed folder in the current relative path", async () => {
+    const fake = createFakeVault(["Doc", "Doc/assets", "Doc/assets/sub"]);
+    const createFolder = vi.spyOn(fake.vault, "createFolder");
+    const { service } = createService(fake);
+    await service.createFolder("Doc", "sub", "  notes  ");
+    expect(createFolder).toHaveBeenCalledWith("Doc/assets/sub/notes");
+    expect(fake.folders.has("Doc/assets/sub/notes")).toBe(true);
+  });
+
+  it.each(["", "   ", ".", "..", "a/b", "a\\b"])(
+    "rejects invalid folder name %j",
+    async (name) => {
+      const fake = createFakeVault(["Doc", "Doc/assets"]);
+      const createFolder = vi.spyOn(fake.vault, "createFolder");
+      const { service } = createService(fake);
+      await expect(service.createFolder("Doc", "", name)).rejects.toThrow(
+        t("notice.folderNameInvalid"),
+      );
+      expect(createFolder).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects a file or folder that differs only by case", async () => {
+    const fake = createFakeVault(["Doc", "Doc/assets", "Doc/assets/Pics"], {
+      "Doc/assets/Photo.PNG": "",
+    });
+    const createFolder = vi.spyOn(fake.vault, "createFolder");
+    const { service } = createService(fake);
+    await expect(service.createFolder("Doc", "", "pics")).rejects.toThrow(
+      t("notice.folderExists"),
+    );
+    await expect(service.createFolder("Doc", "", "photo.png")).rejects.toThrow(
+      t("notice.folderExists"),
+    );
+    expect(createFolder).not.toHaveBeenCalled();
+  });
+
+  it("rejects a hidden name reported only by adapter.list", async () => {
+    const fake = createFakeVault(["Doc", "Doc/assets"]);
+    fake.vault.adapter.list = async () => ({
+      files: ["Doc/assets/.Secret"],
+      folders: [],
+    });
+    const createFolder = vi.spyOn(fake.vault, "createFolder");
+    const { service } = createService(fake);
+    await expect(service.createFolder("Doc", "", ".secret")).rejects.toThrow(
+      t("notice.folderExists"),
+    );
+    expect(createFolder).not.toHaveBeenCalled();
+  });
 });

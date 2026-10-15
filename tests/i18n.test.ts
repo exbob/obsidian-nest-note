@@ -66,6 +66,24 @@ describe("t", () => {
     setLocaleForTests("zh");
   });
 
+  it("translates new-folder copy in zh and en", () => {
+    setLocaleForTests("zh");
+    expect(t("ui.newFolder")).toBe("新建文件夹");
+    expect(t("ui.folderName")).toBe("文件夹名称");
+    expect(t("notice.folderNameInvalid")).toBe("文件夹名称无效");
+    expect(t("notice.folderExists")).toBe("当前路径已存在同名文件或文件夹");
+    expect(t("notice.createFolderFailed")).toBe("无法创建文件夹");
+
+    setLocaleForTests("en");
+    expect(t("ui.newFolder")).toBe("New folder");
+    expect(t("ui.folderName")).toBe("Folder name");
+    expect(t("notice.folderNameInvalid")).toBe("Invalid folder name");
+    expect(t("notice.folderExists")).toBe(
+      "A file or folder with that name already exists",
+    );
+    expect(t("notice.createFolderFailed")).toBe("Could not create the folder");
+  });
+
   it("interpolates known placeholders", () => {
     setLocaleForTests("zh");
     expect(t("error.targetExists", { path: "Work" })).toBe("目标已存在：Work");

@@ -373,6 +373,14 @@ export class FileExplorerView extends ItemView {
   private showBackgroundMenu(event: MouseEvent): void {
     const menu = new Menu();
     menu.addItem((item) => {
+      item.setTitle(t("ui.newFolder"));
+      item.setIcon("folder-plus");
+      item.onClick(() => {
+        this.openNewFolderModal();
+      });
+    });
+    menu.addSeparator();
+    menu.addItem((item) => {
       item.setTitle(t("ui.paste"));
       item.setIcon("clipboard-paste");
       item.onClick(() => {
@@ -380,6 +388,40 @@ export class FileExplorerView extends ItemView {
       });
     });
     menu.showAtMouseEvent(event);
+  }
+
+  private openNewFolderModal(): void {
+    const documentPath = this.documentPath;
+    if (documentPath === null) {
+      return;
+    }
+    const relative = this.relativeWithinRoot;
+    new NestNoteFolderNameModal(this.app, (name) => {
+      void this.createFolder(documentPath, relative, name);
+    }).open();
+  }
+
+  private async createFolder(
+    documentPath: string,
+    relative: string,
+    name: string,
+  ): Promise<void> {
+    try {
+      await this.options.service.createFolder(documentPath, relative, name);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (
+        message === t("notice.folderNameInvalid") ||
+        message === t("notice.folderExists")
+      ) {
+        this.options.notice(message);
+      } else {
+        this.options.notice(t("notice.createFolderFailed"));
+      }
+      return;
+    }
+    this.selected = name;
+    await this.refresh(false);
   }
 
   private insertEntry(entry: ExplorerEntry): void {
@@ -520,6 +562,65 @@ class NestNoteConfirmModal extends Modal {
     );
 
     this.contentEl.append(body, actions);
+  }
+
+  onClose(): void {
+    this.contentEl.replaceChildren();
+  }
+}
+
+class NestNoteFolderNameModal extends Modal {
+  constructor(
+    app: App,
+    private readonly onSubmit: (name: string) => void,
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    this.modalEl.classList.add("nestnote-modal");
+    this.setTitle(t("ui.newFolder"));
+
+    const input = createEl("input", {
+      type: "text",
+      value: "",
+      attr: { "aria-label": t("ui.folderName") },
+    });
+
+    let submitted = false;
+    const submit = (): void => {
+      if (submitted) {
+        return;
+      }
+      const name = input.value.trim();
+      if (name === "") {
+        return;
+      }
+      submitted = true;
+      this.onSubmit(name);
+      this.close();
+    };
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        submit();
+      }
+    });
+
+    const actions = createEl("div", { cls: "nestnote-modal-actions" });
+    actions.append(
+      iconButton("check", t("ui.confirm"), (event) => {
+        event.preventDefault();
+        submit();
+      }),
+      iconButton("x", t("ui.cancel"), () => {
+        this.close();
+      }),
+    );
+
+    this.contentEl.append(input, actions);
+    input.focus();
   }
 
   onClose(): void {
