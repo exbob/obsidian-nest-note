@@ -14,6 +14,8 @@ export interface DocumentNode {
   children: DocumentNode[];
 }
 
+export type DocumentOpenTarget = "tab" | "window";
+
 export interface DocumentService {
   create(parentPath: string | null, name: string): Promise<DocumentNode>;
   rename(documentPath: string, newName: string): Promise<DocumentNode>;
@@ -23,5 +25,5 @@ export interface DocumentService {
     newParentPath: string | null,
     insertBeforePath?: string | null,
   ): Promise<DocumentNode>;
-  open(documentPath: string): Promise<void>;
+  open(documentPath: string, target?: DocumentOpenTarget): Promise<void>;
 }

@@ -32,6 +32,8 @@ export const zh: Record<MessageKey, string> = {
   "ui.expand": "展开",
   "ui.collapse": "折叠",
   "ui.more": "更多",
+  "ui.openInNewTab": "在新标签页中打开",
+  "ui.openInNewWindow": "在新窗口中打开",
   "ui.copyRelativePath": "复制相对路径",
   "ui.copyAbsolutePath": "复制绝对路径",
   "ui.openWithDefaultApp": "使用默认应用打开",

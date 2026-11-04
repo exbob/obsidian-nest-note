@@ -66,6 +66,16 @@ describe("t", () => {
     setLocaleForTests("zh");
   });
 
+  it("translates open-in-new-leaf copy in zh and en", () => {
+    setLocaleForTests("zh");
+    expect(t("ui.openInNewTab")).toBe("在新标签页中打开");
+    expect(t("ui.openInNewWindow")).toBe("在新窗口中打开");
+
+    setLocaleForTests("en");
+    expect(t("ui.openInNewTab")).toBe("Open in new tab");
+    expect(t("ui.openInNewWindow")).toBe("Open in new window");
+  });
+
   it("translates new-folder copy in zh and en", () => {
     setLocaleForTests("zh");
     expect(t("ui.newFolder")).toBe("新建文件夹");

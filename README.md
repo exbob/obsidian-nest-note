@@ -43,6 +43,8 @@ Existing ordinary Markdown notes are not converted into NestNote documents, and 
 | New child document | The button on that row; creates under that document |
 | Reparent and reorder | Drag onto another document to nest it, or onto empty space in the tree to make it a root. Drag above or below a sibling to reorder. Root documents stay sorted by name |
 | Expand all / Collapse all children | Row **More** or right-click → **Expand all** or **Collapse all**. Toggles every nested child under that document. Hidden when the document has no children |
+| Open in new tab | Row **More** or right-click. Opens that document's `index.md`. If an editor already has it open, switches to that editor; otherwise opens a new tab |
+| Open in new window | Row **More** or right-click. Opens that document's `index.md`. If an editor already has it open, switches to that editor; otherwise opens a new Obsidian popout window |
 | Copy relative path | Row **More** or right-click. Copies the vault-relative path of that document's `index.md` |
 | Copy absolute path | Row **More** or right-click. Copies the local absolute path of that document's `index.md` |
 | Open in default app | Row **More** or right-click. Opens that document's `index.md` with the system default app |

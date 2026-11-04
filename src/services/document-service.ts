@@ -13,7 +13,12 @@ import {
 } from "../domain/frontmatter";
 import { t } from "../i18n";
 import { DEFAULT_NESTNOTE_SETTINGS } from "../settings";
-import type { DocumentNode, DocumentService, VaultEntry } from "../types";
+import type {
+  DocumentNode,
+  DocumentOpenTarget,
+  DocumentService,
+  VaultEntry,
+} from "../types";
 
 export class DocumentServiceError extends Error {
   constructor(
@@ -43,6 +48,8 @@ export interface LoadedVaultEntry {
 export interface DocumentWorkspaceLeaf {
   openFile(file: DocumentFileRef): Promise<void>;
   getViewType(): string;
+  getFilePath(): string | null;
+  activate(): void;
 }
 
 export interface DocumentServiceApp {
@@ -63,9 +70,12 @@ export interface DocumentServiceApp {
     trashFile(file: DocumentFileRef): Promise<void>;
   };
   workspace: {
-    getLeaf(newLeaf?: boolean): DocumentWorkspaceLeaf;
+    getLeaf(newLeaf?: boolean | DocumentOpenTarget): DocumentWorkspaceLeaf;
     getMostRecentLeaf?: () => DocumentWorkspaceLeaf | null;
     iterateRootLeaves?: (
+      callback: (leaf: DocumentWorkspaceLeaf) => void,
+    ) => void;
+    iterateAllLeaves?: (
       callback: (leaf: DocumentWorkspaceLeaf) => void,
     ) => void;
   };
@@ -353,10 +363,24 @@ export class NestNoteDocumentService implements DocumentService {
     return this.requireScannedNode(to);
   }
 
-  async open(documentPath: string): Promise<void> {
+  async open(
+    documentPath: string,
+    target?: DocumentOpenTarget,
+  ): Promise<void> {
     const path = this.requireDocument(documentPath);
     const indexFile = this.requireIndex(path);
-    await pickOpenLeaf(this.app.workspace).openFile(indexFile);
+    if (target === undefined) {
+      await pickOpenLeaf(this.app.workspace).openFile(indexFile);
+      return;
+    }
+    const existing = findOpenLeaf(this.app.workspace, indexFile.path);
+    if (existing !== null) {
+      existing.activate();
+      return;
+    }
+    const leaf = this.app.workspace.getLeaf(target);
+    await leaf.openFile(indexFile);
+    leaf.activate();
   }
 
   private validateName(name: string): string {
@@ -636,6 +660,41 @@ function isReservedDeviceName(name: string): boolean {
     return true;
   }
   return /^COM[1-9]$/.test(stem) || /^LPT[1-9]$/.test(stem);
+}
+
+function isOpenEditor(
+  leaf: DocumentWorkspaceLeaf,
+  indexPath: string,
+): boolean {
+  return (
+    leaf.getViewType() !== SIDEBAR_VIEW_TYPE &&
+    leaf.getFilePath() === indexPath
+  );
+}
+
+function findOpenLeaf(
+  workspace: DocumentServiceApp["workspace"],
+  indexPath: string,
+): DocumentWorkspaceLeaf | null {
+  const matches: DocumentWorkspaceLeaf[] = [];
+  const visit = (leaf: DocumentWorkspaceLeaf): void => {
+    if (isOpenEditor(leaf, indexPath)) {
+      matches.push(leaf);
+    }
+  };
+  if (workspace.iterateAllLeaves !== undefined) {
+    workspace.iterateAllLeaves(visit);
+  } else {
+    workspace.iterateRootLeaves?.(visit);
+  }
+  if (matches.length === 0) {
+    return null;
+  }
+  const recent = workspace.getMostRecentLeaf?.() ?? null;
+  if (recent !== null && isOpenEditor(recent, indexPath)) {
+    return recent;
+  }
+  return matches[0];
 }
 
 function pickOpenLeaf(

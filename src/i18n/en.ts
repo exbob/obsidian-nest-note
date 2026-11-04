@@ -39,6 +39,8 @@ export const en: Record<MessageKey, string> = {
   "ui.expand": "Expand",
   "ui.collapse": "Collapse",
   "ui.more": "More",
+  "ui.openInNewTab": "Open in new tab",
+  "ui.openInNewWindow": "Open in new window",
   "ui.copyRelativePath": "Copy relative path",
   "ui.copyAbsolutePath": "Copy absolute path",
   "ui.openWithDefaultApp": "Open in default app",

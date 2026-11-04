@@ -28,6 +28,8 @@ export const MESSAGE_KEYS = [
   "ui.expand",
   "ui.collapse",
   "ui.more",
+  "ui.openInNewTab",
+  "ui.openInNewWindow",
   "ui.copyRelativePath",
   "ui.copyAbsolutePath",
   "ui.openWithDefaultApp",

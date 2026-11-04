@@ -1,4 +1,4 @@
-import { MarkdownView, Modal, Notice, Plugin, setIcon } from "obsidian";
+import { FileView, MarkdownView, Modal, Notice, Plugin, setIcon } from "obsidian";
 import { t } from "./i18n";
 import type {
   App,
@@ -671,6 +671,11 @@ function createDocumentWorkspace(
         callback(wrapWorkspaceLeaf(app, leaf));
       });
     },
+    iterateAllLeaves: (callback) => {
+      app.workspace.iterateAllLeaves((leaf) => {
+        callback(wrapWorkspaceLeaf(app, leaf));
+      });
+    },
   };
 }
 
@@ -683,6 +688,18 @@ function wrapWorkspaceLeaf(app: App, leaf: WorkspaceLeaf): DocumentWorkspaceLeaf
       app.workspace.setActiveLeaf(leaf, { focus: false });
     },
     getViewType: () => leaf.view.getViewType(),
+    getFilePath: () => {
+      const view = leaf.view;
+      if (view instanceof FileView && view.file !== null) {
+        return view.file.path;
+      }
+      return null;
+    },
+    activate: () => {
+      void app.workspace.revealLeaf(leaf).then(() => {
+        app.workspace.setActiveLeaf(leaf, { focus: true });
+      });
+    },
   };
 }
 

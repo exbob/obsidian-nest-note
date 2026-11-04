@@ -139,62 +139,101 @@ class FakeVault {
   }
 }
 
+type LeafTarget = boolean | "tab" | "window";
+
+interface TrackedLeaf {
+  path: string | null;
+  viewType: string;
+  openFile: (file: FileRef) => Promise<void>;
+  getViewType: () => string;
+  getFilePath: () => string | null;
+  activate: () => void;
+}
+
 class FakeWorkspace {
-  lastNewLeaf: boolean | undefined;
+  lastNewLeaf: LeafTarget | undefined;
   opened: string[] = [];
   openedViewTypes: string[] = [];
   sidebarFocused = false;
+  readonly activated: TrackedLeaf[] = [];
+  readonly getLeafCalls: Array<LeafTarget | undefined> = [];
+  readonly events: string[] = [];
+  private readonly rootLeaves: TrackedLeaf[] = [];
+  private allLeaves: TrackedLeaf[] | null = null;
+  private recentOverride: TrackedLeaf | null | undefined = undefined;
+  iterateAllLeaves: ((callback: (leaf: TrackedLeaf) => void) => void) | undefined =
+    (callback) => {
+      const leaves = this.allLeaves ?? this.rootLeaves;
+      for (const leaf of leaves) {
+        callback(leaf);
+      }
+    };
 
-  getLeaf(newLeaf?: boolean): {
-    openFile: (file: FileRef) => Promise<void>;
-    getViewType: () => string;
-  } {
+  trackLeaf(path: string | null, viewType = "markdown"): TrackedLeaf {
+    const leaf: TrackedLeaf = {
+      path,
+      viewType,
+      getViewType: () => leaf.viewType,
+      getFilePath: () => leaf.path,
+      activate: () => {
+        this.activated.push(leaf);
+        this.events.push(`activate:${leaf.path ?? leaf.viewType}`);
+      },
+      openFile: async (file: FileRef) => {
+        leaf.path = file.path;
+        this.opened.push(file.path);
+        this.openedViewTypes.push(leaf.viewType);
+        this.events.push(`open:${file.path}`);
+      },
+    };
+    return leaf;
+  }
+
+  addRootLeaf(path: string | null, viewType = "markdown"): TrackedLeaf {
+    const leaf = this.trackLeaf(path, viewType);
+    this.rootLeaves.push(leaf);
+    return leaf;
+  }
+
+  setAllLeaves(leaves: readonly TrackedLeaf[]): void {
+    this.allLeaves = [...leaves];
+  }
+
+  setRecent(leaf: TrackedLeaf | null): void {
+    this.recentOverride = leaf;
+  }
+
+  getLeaf(newLeaf?: LeafTarget): TrackedLeaf {
+    this.getLeafCalls.push(newLeaf);
     this.lastNewLeaf = newLeaf;
     const viewType =
       this.sidebarFocused && newLeaf !== true
         ? "nestnote-document-tree"
         : "markdown";
-    return {
-      getViewType: () => viewType,
-      openFile: async (file: FileRef) => {
-        this.opened.push(file.path);
-        this.openedViewTypes.push(viewType);
-      },
-    };
+    return this.trackLeaf(null, viewType);
   }
 
-  getMostRecentLeaf(): {
-    openFile: (file: FileRef) => Promise<void>;
-    getViewType: () => string;
-  } | null {
+  getMostRecentLeaf(): TrackedLeaf | null {
+    if (this.recentOverride !== undefined) {
+      return this.recentOverride;
+    }
     if (!this.sidebarFocused) {
       return null;
     }
-    return {
-      getViewType: () => "nestnote-document-tree",
-      openFile: async (file: FileRef) => {
-        this.opened.push(file.path);
-        this.openedViewTypes.push("nestnote-document-tree");
-      },
-    };
+    return this.trackLeaf(null, "nestnote-document-tree");
   }
 
-  iterateRootLeaves(
-    callback: (leaf: {
-      openFile: (file: FileRef) => Promise<void>;
-      getViewType: () => string;
-    }) => void,
-  ): void {
+  iterateRootLeaves(callback: (leaf: TrackedLeaf) => void): void {
+    if (this.rootLeaves.length > 0) {
+      for (const leaf of this.rootLeaves) {
+        callback(leaf);
+      }
+      return;
+    }
     if (!this.sidebarFocused) {
       return;
     }
-    callback({
-      getViewType: () => "markdown",
-      openFile: async (file: FileRef) => {
-        this.opened.push(file.path);
-        this.openedViewTypes.push("markdown");
-      },
-    });
+    callback(this.trackLeaf(null, "markdown"));
   }
 }
 
@@ -1139,6 +1178,127 @@ describe("NestNoteDocumentService.open", () => {
       "nestnote-document-tree",
     );
     expect(app.workspace.lastNewLeaf).toBeUndefined();
+  });
+
+  it("activates an already open editor instead of creating a tab or window", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+    });
+    const open = app.workspace.addRootLeaf("Work/index.md");
+
+    await service.open("Work", "tab");
+    await service.open("Work", "window");
+
+    expect(app.workspace.activated).toEqual([open, open]);
+    expect(app.workspace.getLeafCalls).toEqual([]);
+    expect(app.workspace.opened).toEqual([]);
+    expect(app.workspace.events).toEqual([
+      "activate:Work/index.md",
+      "activate:Work/index.md",
+    ]);
+  });
+
+  it("prefers the most recent editor with the same file path over an earlier leaf", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+    });
+    const first = app.workspace.addRootLeaf("Work/index.md");
+    const second = app.workspace.trackLeaf("Work/index.md");
+    app.workspace.setAllLeaves([first, second]);
+    const recent = app.workspace.trackLeaf("Work/index.md");
+    app.workspace.setRecent(recent);
+
+    await service.open("Work", "window");
+
+    expect(app.workspace.activated).toEqual([recent]);
+    expect(app.workspace.getLeafCalls).toEqual([]);
+  });
+
+  it("uses the first matching editor when the most recent leaf is the sidebar", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+    });
+    const first = app.workspace.addRootLeaf("Work/index.md");
+    app.workspace.addRootLeaf("Work/index.md");
+    app.workspace.setRecent(
+      app.workspace.trackLeaf(null, "nestnote-document-tree"),
+    );
+
+    await service.open("Work", "tab");
+
+    expect(app.workspace.activated).toEqual([first]);
+    expect(app.workspace.getLeafCalls).toEqual([]);
+  });
+
+  it("reuses a popout leaf that only iterateAllLeaves can see", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+    });
+    const popout = app.workspace.trackLeaf("Work/index.md");
+    app.workspace.setAllLeaves([popout]);
+
+    await service.open("Work", "window");
+
+    expect(app.workspace.activated).toEqual([popout]);
+    expect(app.workspace.getLeafCalls).toEqual([]);
+  });
+
+  it("falls back to root leaves when iterateAllLeaves is absent", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+    });
+    const open = app.workspace.addRootLeaf("Work/index.md");
+    app.workspace.iterateAllLeaves = undefined;
+
+    await service.open("Work", "tab");
+
+    expect(app.workspace.activated).toEqual([open]);
+    expect(app.workspace.getLeafCalls).toEqual([]);
+  });
+
+  it("opens a new tab when the index is not already open", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+    });
+
+    await service.open("Work", "tab");
+
+    expect(app.workspace.getLeafCalls).toEqual(["tab"]);
+    expect(app.workspace.opened).toEqual(["Work/index.md"]);
+    expect(app.workspace.events).toEqual([
+      "open:Work/index.md",
+      "activate:Work/index.md",
+    ]);
+  });
+
+  it("opens a new window when the index is not already open", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+      seedDocument(vault, "Inbox", parentIndex("Inbox"));
+    });
+
+    await service.open("Inbox", "window");
+
+    expect(app.workspace.getLeafCalls).toEqual(["window"]);
+    expect(app.workspace.opened).toEqual(["Inbox/index.md"]);
+    expect(app.workspace.events).toEqual([
+      "open:Inbox/index.md",
+      "activate:Inbox/index.md",
+    ]);
+  });
+
+  it("does not open a reserved attachments path in a new tab", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+      seedAttachmentsLookalike(vault, "Work/attachments");
+    });
+
+    await expect(service.open("Work/attachments", "tab")).rejects.toThrow(
+      DocumentServiceError,
+    );
+    expect(app.workspace.opened).toEqual([]);
+    expect(app.workspace.getLeafCalls).toEqual([]);
+    expect(app.workspace.activated).toEqual([]);
   });
 });
 

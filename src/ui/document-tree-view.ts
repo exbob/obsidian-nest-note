@@ -1,7 +1,11 @@
 import { ItemView, Menu, Modal, setIcon } from "obsidian";
 import type { App, WorkspaceLeaf } from "obsidian";
 import { t } from "../i18n";
-import type { DocumentNode, DocumentService } from "../types";
+import type {
+  DocumentNode,
+  DocumentOpenTarget,
+  DocumentService,
+} from "../types";
 import { isAlreadyNoticed } from "../services/document-service";
 import type { DesktopFileActions } from "./desktop-file-actions";
 import { createDesktopFileActions } from "./desktop-file-actions";
@@ -252,6 +256,21 @@ export class DocumentTreeView extends ItemView {
       menu.addSeparator();
     }
     menu.addItem((item) => {
+      item.setTitle(t("ui.openInNewTab"));
+      item.setIcon("file-plus");
+      item.onClick(() => {
+        void this.openDocument(node.path, "tab");
+      });
+    });
+    menu.addItem((item) => {
+      item.setTitle(t("ui.openInNewWindow"));
+      item.setIcon("app-window");
+      item.onClick(() => {
+        void this.openDocument(node.path, "window");
+      });
+    });
+    menu.addSeparator();
+    menu.addItem((item) => {
       item.setTitle(t("ui.copyRelativePath"));
       item.setIcon("copy");
       item.onClick(() => {
@@ -393,11 +412,18 @@ export class DocumentTreeView extends ItemView {
     setIcon(button, allExpanded ? "chevrons-down-up" : "chevrons-up-down");
   }
 
-  private async openDocument(path: string): Promise<void> {
+  private async openDocument(
+    path: string,
+    target?: DocumentOpenTarget,
+  ): Promise<void> {
     this.selected = path;
     this.render(this.nodes);
     try {
-      await this.options.documents.open(path);
+      if (target === undefined) {
+        await this.options.documents.open(path);
+      } else {
+        await this.options.documents.open(path, target);
+      }
     } catch (error) {
       this.fail(error);
     }

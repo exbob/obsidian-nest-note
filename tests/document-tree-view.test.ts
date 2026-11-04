@@ -449,6 +449,9 @@ describe("DocumentTreeView", () => {
     expect(fromMore).toEqual([
       t("ui.expandAll"),
       "separator",
+      t("ui.openInNewTab"),
+      t("ui.openInNewWindow"),
+      "separator",
       t("ui.copyRelativePath"),
       t("ui.copyAbsolutePath"),
       "separator",
@@ -464,6 +467,9 @@ describe("DocumentTreeView", () => {
     await mount();
     openMenu("Inbox", "more");
     expect(menuStructure()).toEqual([
+      t("ui.openInNewTab"),
+      t("ui.openInNewWindow"),
+      "separator",
       t("ui.copyRelativePath"),
       t("ui.copyAbsolutePath"),
       "separator",
@@ -473,6 +479,30 @@ describe("DocumentTreeView", () => {
       t("ui.rename"),
       t("ui.delete"),
     ]);
+  });
+
+  it("opens the row in a new tab or a new window from the shared menu", async () => {
+    const { documents } = await mount();
+    menuItem("Work", t("ui.openInNewTab")).click();
+    await flush();
+    expect(documents.open).toHaveBeenCalledWith("Work", "tab");
+    expect(row("Work").classList.contains("is-selected")).toBe(true);
+
+    menuItem("Inbox", t("ui.openInNewWindow")).click();
+    await flush();
+    expect(documents.open).toHaveBeenCalledWith("Inbox", "window");
+    expect(row("Inbox").classList.contains("is-selected")).toBe(true);
+  });
+
+  it("still opens the clicked name without a leaf target", async () => {
+    const { documents } = await mount();
+    const name = row("Inbox").querySelector(".nestnote-name");
+    if (!(name instanceof HTMLElement)) {
+      throw new Error("name missing");
+    }
+    name.click();
+    await flush();
+    expect(documents.open).toHaveBeenCalledWith("Inbox");
   });
 
   it("copies the index.md vault-relative path", async () => {
@@ -545,6 +575,8 @@ describe("DocumentTreeView", () => {
     });
     expect(nodeRow("Work/Notes").dispatchEvent(event)).toBe(false);
     expect(menuLabels()).toEqual([
+      t("ui.openInNewTab"),
+      t("ui.openInNewWindow"),
       t("ui.copyRelativePath"),
       t("ui.copyAbsolutePath"),
       t("ui.openWithDefaultApp"),
