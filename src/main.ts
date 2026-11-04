@@ -562,7 +562,7 @@ function wrapWithInternal(
       coordinator.runInternal(() =>
         inner.move(documentPath, newParentPath, insertBeforePath),
       ),
-    open: (documentPath) => inner.open(documentPath),
+    open: (documentPath, target) => inner.open(documentPath, target),
   };
 }
 

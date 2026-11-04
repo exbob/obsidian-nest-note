@@ -229,7 +229,8 @@ class FakeWorkspace {
   getLeftLeafSplits: boolean[] = [];
   readonly leftSidebarLeaves: FakeLeaf[] = [];
   opened: string[] = [];
-  lastNewLeaf: boolean | undefined;
+  lastNewLeaf: boolean | "tab" | "window" | undefined;
+  readonly leafTargets: Array<boolean | "tab" | "window" | undefined> = [];
   private readonly listeners = new Map<
     string,
     Array<{ callback: (...args: unknown[]) => unknown; ref: EventRef }>
@@ -281,7 +282,8 @@ class FakeWorkspace {
     return this.activeMarkdownView;
   }
 
-  getLeaf(newLeaf?: boolean): FakeLeaf {
+  getLeaf(newLeaf?: boolean | "tab" | "window"): FakeLeaf {
+    this.leafTargets.push(newLeaf);
     this.lastNewLeaf = newLeaf;
     const leaf = new FakeLeaf(this);
     this.leaves.push(leaf);
@@ -331,6 +333,12 @@ class FakeWorkspace {
   }
 
   iterateRootLeaves(callback: (leaf: FakeLeaf) => void): void {
+    for (const leaf of this.leaves) {
+      callback(leaf);
+    }
+  }
+
+  iterateAllLeaves(callback: (leaf: FakeLeaf) => void): void {
     for (const leaf of this.leaves) {
       callback(leaf);
     }
@@ -1603,6 +1611,43 @@ created: 2020-01-01T00:00:00Z
 
     const rendered = document.querySelector('[data-path="Inbox"]');
     expect(rendered).not.toBeNull();
+  });
+
+  it("forwards a new tab or window target instead of reusing the current leaf", async () => {
+    const app = createApp((vault) => {
+      seedDocument(
+        vault,
+        "Work",
+        `---
+name: Work
+created: 2020-01-01T00:00:00Z
+---
+`,
+      );
+    });
+    const plugin = loadPlugin(app, {
+      openPanelOnStartup: false,
+      openFileExplorerOnStartup: false,
+    });
+    await plugin.onload();
+    const documents = (
+      plugin as unknown as {
+        documents: {
+          open(path: string, target?: "tab" | "window"): Promise<void>;
+        };
+      }
+    ).documents;
+
+    app.workspace.leafTargets.length = 0;
+    await documents.open("Work", "tab");
+    expect(app.workspace.leafTargets).toContain("tab");
+    expect(app.workspace.opened).toEqual(["Work/index.md"]);
+
+    app.workspace.leafTargets.length = 0;
+    app.workspace.opened.length = 0;
+    await documents.open("Work", "window");
+    expect(app.workspace.leafTargets).toContain("window");
+    expect(app.workspace.opened).toEqual(["Work/index.md"]);
   });
 
   describe("file explorer wiring", () => {

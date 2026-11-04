@@ -92,6 +92,10 @@ export class ItemView {
   }
 }
 
+export class FileView extends ItemView {
+  file: { path: string } | null = null;
+}
+
 export class MarkdownView {
   editor = { replaceSelection(_text: string): void {} };
 }
