@@ -148,6 +148,7 @@ interface TrackedLeaf {
   getViewType: () => string;
   getFilePath: () => string | null;
   activate: () => void;
+  reveal: () => void;
 }
 
 class FakeWorkspace {
@@ -156,6 +157,7 @@ class FakeWorkspace {
   openedViewTypes: string[] = [];
   sidebarFocused = false;
   readonly activated: TrackedLeaf[] = [];
+  readonly revealed: TrackedLeaf[] = [];
   readonly getLeafCalls: Array<LeafTarget | undefined> = [];
   readonly events: string[] = [];
   private readonly rootLeaves: TrackedLeaf[] = [];
@@ -178,6 +180,10 @@ class FakeWorkspace {
       activate: () => {
         this.activated.push(leaf);
         this.events.push(`activate:${leaf.path ?? leaf.viewType}`);
+      },
+      reveal: () => {
+        this.revealed.push(leaf);
+        this.events.push(`reveal:${leaf.path ?? leaf.viewType}`);
       },
       openFile: async (file: FileRef) => {
         leaf.path = file.path;
@@ -1153,6 +1159,24 @@ created: 2020-01-01T00:00:00Z
 });
 
 describe("NestNoteDocumentService.open", () => {
+  it("reveals an already open editor instead of opening the index again", async () => {
+    const { app, service } = createHarness((vault) => {
+      seedDocument(vault, "Work", workIndex());
+      seedDocument(vault, "Inbox", parentIndex("Inbox"));
+    });
+    const existing = app.workspace.addRootLeaf("Work/index.md");
+    const current = app.workspace.addRootLeaf("Inbox/index.md");
+    app.workspace.setRecent(current);
+
+    await service.open("Work");
+
+    expect(app.workspace.revealed).toEqual([existing]);
+    expect(app.workspace.activated).toEqual([]);
+    expect(app.workspace.opened).toEqual([]);
+    expect(app.workspace.getLeafCalls).toEqual([]);
+    expect(current.path).toBe("Inbox/index.md");
+  });
+
   it("opens the document index in the current leaf", async () => {
     const { app, service } = createHarness((vault) => {
       seedDocument(vault, "Work", workIndex());

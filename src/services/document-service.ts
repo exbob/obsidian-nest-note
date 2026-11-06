@@ -50,6 +50,7 @@ export interface DocumentWorkspaceLeaf {
   getViewType(): string;
   getFilePath(): string | null;
   activate(): void;
+  reveal(): void;
 }
 
 export interface DocumentServiceApp {
@@ -369,13 +370,17 @@ export class NestNoteDocumentService implements DocumentService {
   ): Promise<void> {
     const path = this.requireDocument(documentPath);
     const indexFile = this.requireIndex(path);
-    if (target === undefined) {
-      await pickOpenLeaf(this.app.workspace).openFile(indexFile);
-      return;
-    }
     const existing = findOpenLeaf(this.app.workspace, indexFile.path);
     if (existing !== null) {
-      existing.activate();
+      if (target === undefined) {
+        existing.reveal();
+      } else {
+        existing.activate();
+      }
+      return;
+    }
+    if (target === undefined) {
+      await pickOpenLeaf(this.app.workspace).openFile(indexFile);
       return;
     }
     const leaf = this.app.workspace.getLeaf(target);

@@ -680,6 +680,11 @@ function createDocumentWorkspace(
 }
 
 function wrapWorkspaceLeaf(app: App, leaf: WorkspaceLeaf): DocumentWorkspaceLeaf {
+  const show = (focus: boolean): void => {
+    void app.workspace.revealLeaf(leaf).then(() => {
+      app.workspace.setActiveLeaf(leaf, { focus });
+    });
+  };
   return {
     openFile: async (file) => {
       const found = requireFile(app, file.path);
@@ -696,9 +701,10 @@ function wrapWorkspaceLeaf(app: App, leaf: WorkspaceLeaf): DocumentWorkspaceLeaf
       return null;
     },
     activate: () => {
-      void app.workspace.revealLeaf(leaf).then(() => {
-        app.workspace.setActiveLeaf(leaf, { focus: true });
-      });
+      show(true);
+    },
+    reveal: () => {
+      show(false);
     },
   };
 }
